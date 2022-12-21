@@ -59,12 +59,12 @@ WantedBy=multi-user.target
 
 # ===============================================================================
 
-import datetime
 import importlib
 import json
 import logging
 import os
 import time
+import typing
 
 import paho.mqtt.client as mqtt  # paho-mqtt is already installed in emon
 import requests
@@ -87,7 +87,7 @@ GLOW_BASE_TOPIC = "glow/" + GLOW_DEVICE_ID + "/#"
 
 # Emoncms server configuration
 emoncms_apikey = os.getenv("EMONCMS_APIKEY")
-emoncms_server = os.getenv("EMONCMS_SERVER","127.0.0.1")
+emoncms_server = os.getenv("EMONCMS_SERVER", "127.0.0.1")
 server = f"http://{emoncms_server}"
 NODE = "Glow"  # Name of the Input(tag) created to receive the INPUT data
 
@@ -103,55 +103,72 @@ def on_connect(client, _userdata, _flags, result_code):
     if result_code != mqtt.MQTT_ERR_SUCCESS:
         logging.error("Error connecting: %d", result_code)
         return
-
-    # result_code, _message_id = client.subscribe("SMART/HILD/" + GLOW_DEVICE_ID)
     result_code, _message_id = client.subscribe(GLOW_BASE_TOPIC)
 
     if result_code != mqtt.MQTT_ERR_SUCCESS:
         logging.error("Couldn't subscribe: %d", result_code)
         return
-
     logging.info("Connected and subscribed")
 
 
 def on_message(_client, _userdata, message):
     payload = json.loads(message.payload)
-    current_time = datetime.datetime.now().strftime("%H:%M:%S")
+    response_payload = None
     if "electricitymeter" in payload:
-        electricity_data = payload["electricitymeter"]
-        date_string = electricity_data["timestamp"]
-        current_time = time.mktime(time.strptime(date_string, '%Y-%m-%dT%H:%M:%SZ'))
-    
-        electricity_momentary_consumption = electricity_data['power']['value']
-        electricity_daily_consumption = electricity_data['energy']['import']['day']
-        electricity_weekly_consumption = electricity_data['energy']['import']['week'] 
-        electricity_monthly_consumption = electricity_data['energy']['import']['month'] 
-        electricity_meter = electricity_data['energy']['import']['cumulative'] 
-        electricity_price_unit = electricity_data['energy']['import']['price']['unitrate']
-        electricity_price_standing = electricity_data['energy']['import']['price']['standingcharge']
-
-        assert (electricity_data["energy"]["import"]["units"] == "kWh") 
-        assert (electricity_data["power"]["units"] == "kW") 
-
-        payload = {
-            "time": current_time,
-            "power": electricity_momentary_consumption,
-            "daily": electricity_daily_consumption,
-            "weekly": electricity_weekly_consumption,
-            "monthly": electricity_monthly_consumption,
-            "meter_id": electricity_meter,
-            "unit_rate": electricity_price_unit,
-            "standing_charge": electricity_price_standing,
+        data = payload["electricitymeter"]
+        common_data = extract_common_data(data, "elect")
+        electricity_data = {
+            "elect_power": data["power"]["value"],
+            "elect_meter": data["energy"]["import"]["mpan"],
         }
+        assert (data["energy"]["import"]["units"] == "kWh")
+        assert (data["power"]["units"] == "kW")
+
+        response_payload = common_data | electricity_data
+
+    elif "gasmeter" in payload:
+        data = payload["gasmeter"]
+        common_data = extract_common_data(data, "gas")
+        gas_data = {
+            "gas_cumulativevol": data["energy"]["import"]["cumulativevol"],
+            "gas_cumulativevolunits": data["energy"]["import"]["cumulativevolunits"],
+            "gas_dayvol": data["energy"]["import"]["dayvol"],
+            "gas_weekvol": data["energy"]["import"]["weekvol"],
+            "gas_monthvol": data["energy"]["import"]["monthvol"],
+            "gas_dayweekmonthvolunits": data["energy"]["import"]["dayweekmonthvolunits"],
+            "gas_meter": data["energy"]["import"]["mprn"],
+        }
+        response_payload = common_data | gas_data
+        assert (data["energy"]["import"]["units"] == "kWh")
+        assert (data["energy"]["import"]["cumulativevolunits"] == "m3")
+        assert (data["energy"]["import"]["dayweekmonthvolunits"] == "kWh")
+
+    if (response_payload is not None):
         params_to_send = {
             "apikey": emoncms_apikey,
-            "fulljson": json.dumps(payload),
+            "fulljson": json.dumps(response_payload),
         }
 
-        logging.info("Full payload: %s", json.dumps(payload, indent=2))   # Don't need this info printed
+        # logging.info("Full payload: %s", json.dumps(
+          #   response_payload, indent=2))   # Don't need this info printed
 
         response = requests.get(f"{server}/input/post/{NODE}", params=params_to_send, timeout=4)
-        print(response)
+        # print(response)
+
+
+def extract_common_data(data: typing.Dict, prefix: str) -> typing.Dict:
+    return_value = {
+        f"{prefix}_unitrate": data['energy']['import']['price']['unitrate'],
+        f"{prefix}_standingcharge": data['energy']['import']['price']['standingcharge'],
+        f"{prefix}_day": data['energy']['import']['day'],
+        f"{prefix}_week": data['energy']['import']['week'],
+        f"{prefix}_month": data['energy']['import']['month'],
+        f"{prefix}_cumulative": data['energy']['import']['cumulative'],
+        f"{prefix}_units": data['energy']['import']['units'],
+        f"{prefix}_time": time.mktime(time.strptime(data["timestamp"], '%Y-%m-%dT%H:%M:%SZ')),
+        f"{prefix}_supplier": data['energy']['import']['supplier'],
+    }
+    return return_value
 
 
 def loop():
@@ -160,10 +177,8 @@ def loop():
     # client.username_pw_set(GLOW_LOGIN, GLOW_PASSWORD)
     client.on_connect = on_connect
     client.on_message = on_message
-    # client.connect("glowmqtt.energyhive.com")
     client.connect(GLOW_MQTT_HOST)
     client.loop_forever()
-
 
 if __name__ == "__main__":
     loop()

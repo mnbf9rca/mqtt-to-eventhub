@@ -1,0 +1,4 @@
+requests
+paho-mqtt
+types-paho-mqtt
+python-dotenv

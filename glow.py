@@ -69,8 +69,10 @@ import typing
 import paho.mqtt.client as mqtt  # paho-mqtt is already installed in emon
 import requests
 
-# from dotenv import load_dotenv
+# reduce the amount of logging from the requests library
+logging.getLogger("requests").setLevel(logging.WARNING)
 
+# load dotenv only if it's available, otherwise assume environment variables are set
 dotenv_spec = importlib.util.find_spec("dotenv")
 if (dotenv_spec is not None):
     print("loading dotenv")
@@ -117,31 +119,41 @@ def on_message(_client, _userdata, message):
     if "electricitymeter" in payload:
         data = payload["electricitymeter"]
         common_data = extract_common_data(data, "elect")
+        # check the units match what we're expecting.
+        assert (data["energy"]["import"]["units"] in ["kWh", "Wh"])
+        assert (data["power"]["units"] in ["kW", "W"])
         electricity_data = {
-            "elect_power": data["power"]["value"],
-            "elect_meter": data["energy"]["import"]["mpan"],
+            "elect_power": convert_to_watts(data["power"]["value"], data["power"]["units"]),
         }
-        assert (data["energy"]["import"]["units"] == "kWh")
-        assert (data["power"]["units"] == "kW")
 
-        response_payload = common_data | electricity_data
+
+        response_payload = {**common_data , **electricity_data}
 
     elif "gasmeter" in payload:
         data = payload["gasmeter"]
+        # check the units match what we're expecting.
+        # we rely on import.units being the same as import.dayweekmonthvolunits
+        assert (data["energy"]["import"]["units"] in ["kWh", "Wh"])
+        assert (data["energy"]["import"]["cumulativevolunits"] == "m3")
+
         common_data = extract_common_data(data, "gas")
+
+        dayweekmonthvolunits = data["energy"]["import"]["dayweekmonthvolunits"]
+        conveert_dayweekmonthvolunits = (dayweekmonthvolunits in ["kWh", "Wh"])
+        
         gas_data = {
             "gas_cumulativevol": data["energy"]["import"]["cumulativevol"],
-            "gas_cumulativevolunits": data["energy"]["import"]["cumulativevolunits"],
-            "gas_dayvol": data["energy"]["import"]["dayvol"],
-            "gas_weekvol": data["energy"]["import"]["weekvol"],
-            "gas_monthvol": data["energy"]["import"]["monthvol"],
-            "gas_dayweekmonthvolunits": data["energy"]["import"]["dayweekmonthvolunits"],
-            "gas_meter": data["energy"]["import"]["mprn"],
+        #   on my meter, these are always in kWh but i don't know if that's always the case
+        #   as it's 'vol', i assume it might be in m3 on some meters
+        #   so i'm conditionally converting to watts if the units are in [k]Wh
+            "gas_dayvol": convert_to_watts(data["energy"]["import"]["dayvol"],dayweekmonthvolunits) if conveert_dayweekmonthvolunits else data["energy"]["import"]["dayvol"],
+            "gas_weekvol": convert_to_watts(data["energy"]["import"]["weekvol"],dayweekmonthvolunits) if conveert_dayweekmonthvolunits else data["energy"]["import"]["weekvol"],
+            "gas_monthvol": convert_to_watts(data["energy"]["import"]["monthvol"],dayweekmonthvolunits) if conveert_dayweekmonthvolunits else data["energy"]["import"]["monthvol"],
         }
-        response_payload = common_data | gas_data
-        assert (data["energy"]["import"]["units"] == "kWh")
-        assert (data["energy"]["import"]["cumulativevolunits"] == "m3")
-        assert (data["energy"]["import"]["dayweekmonthvolunits"] == "kWh")
+
+
+
+        response_payload = {**common_data, **gas_data}
 
     if (response_payload is not None):
         params_to_send = {
@@ -153,22 +165,32 @@ def on_message(_client, _userdata, message):
           #   response_payload, indent=2))   # Don't need this info printed
 
         response = requests.get(f"{server}/input/post/{NODE}", params=params_to_send, timeout=4)
-        # print(response)
+        if (response.status_code != 200) or (response.json() is None) or (not response.json()['success']):
+            logging.error("Error sending data to emoncms: %s", response.text)
+            raise Exception("Error sending data to emoncms")
 
 
 def extract_common_data(data: typing.Dict, prefix: str) -> typing.Dict:
+    units = data['energy']['import']['units']
     return_value = {
         f"{prefix}_unitrate": data['energy']['import']['price']['unitrate'],
         f"{prefix}_standingcharge": data['energy']['import']['price']['standingcharge'],
-        f"{prefix}_day": data['energy']['import']['day'],
-        f"{prefix}_week": data['energy']['import']['week'],
-        f"{prefix}_month": data['energy']['import']['month'],
-        f"{prefix}_cumulative": data['energy']['import']['cumulative'],
-        f"{prefix}_units": data['energy']['import']['units'],
-        f"{prefix}_time": time.mktime(time.strptime(data["timestamp"], '%Y-%m-%dT%H:%M:%SZ')),
-        f"{prefix}_supplier": data['energy']['import']['supplier'],
+        f"{prefix}_day": convert_to_watts(data['energy']['import']['day'], units),
+        f"{prefix}_week": convert_to_watts(data['energy']['import']['week'], units),
+        f"{prefix}_month": convert_to_watts(data['energy']['import']['month'], units),
+        f"{prefix}_cumulative": convert_to_watts(data['energy']['import']['cumulative'], units),
+        f"{prefix}_time": round(time.mktime(time.strptime(data["timestamp"], '%Y-%m-%dT%H:%M:%SZ'))),
     }
     return return_value
+
+def convert_to_watts(power: float, units: str) -> int:
+
+    if units in ["kW", "kWh"]:
+        return round(power * 1000)
+    elif units in ["W", "Wh"]:
+        return round(power)
+    else:
+        raise ValueError(f"Unknown units: {units}")
 
 
 def loop():

@@ -72,6 +72,8 @@ import requests
 
 # reduce the amount of logging from the requests library
 logging.getLogger("requests").setLevel(logging.WARNING)
+logging.getLogger("urllib3").propagate = False
+
 
 # load dotenv only if it's available, otherwise assume environment variables are set
 dotenv_spec = importlib.util.find_spec("dotenv")
@@ -118,8 +120,9 @@ def on_message(_client, _userdata, message):
     payload = json.loads(message.payload)
     response_payload = None
     if "electricitymeter" in payload:
+        meter_type = "elect"
         data = payload["electricitymeter"]
-        common_data = extract_common_data(data, "elect")
+        common_data = extract_common_data(data, meter_type)
         # check the units match what we're expecting.
         assert (data["energy"]["import"]["units"] in ["kWh", "Wh"])
         assert (data["power"]["units"] in ["kW", "W"])
@@ -131,13 +134,14 @@ def on_message(_client, _userdata, message):
         response_payload = {**common_data , **electricity_data}
 
     elif "gasmeter" in payload:
+        meter_type = "gas"
         data = payload["gasmeter"]
         # check the units match what we're expecting.
         # we rely on import.units being the same as import.dayweekmonthvolunits
         assert (data["energy"]["import"]["units"] in ["kWh", "Wh"])
         assert (data["energy"]["import"]["cumulativevolunits"] == "m3")
 
-        common_data = extract_common_data(data, "gas")
+        common_data = extract_common_data(data, meter_type)
 
         dayweekmonthvolunits = data["energy"]["import"]["dayweekmonthvolunits"]
         conveert_dayweekmonthvolunits = (dayweekmonthvolunits in ["kWh", "Wh"])
@@ -180,7 +184,7 @@ def extract_common_data(data: typing.Dict, prefix: str) -> typing.Dict:
         f"{prefix}_week": convert_to_watts(data['energy']['import']['week'], units),
         f"{prefix}_month": convert_to_watts(data['energy']['import']['month'], units),
         f"{prefix}_cumulative": convert_to_watts(data['energy']['import']['cumulative'], units),
-        f"{prefix}_time": round(time.mktime(time.strptime(data["timestamp"], '%Y-%m-%dT%H:%M:%SZ'))),
+        "time": round(time.mktime(time.strptime(data["timestamp"], '%Y-%m-%dT%H:%M:%SZ'))),
     }
     return return_value
 

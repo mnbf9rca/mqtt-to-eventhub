@@ -41,6 +41,7 @@ After=mosquitto.service
 StartLimitIntervalSec=0
 
 [Service]
+Environment=EMONCMS_APIKEY="<APIKEYHERE>"
 Type=simple
 Restart=always
 RestartSec=1

@@ -121,42 +121,41 @@ def on_message(_client, _userdata, message):
     response_payload = None
     if "electricitymeter" in payload:
         meter_type = "elect"
-        data = payload["electricitymeter"]
-        common_data = extract_common_data(data, meter_type)
+        meter_data = payload["electricitymeter"]
+
         # check the units match what we're expecting.
-        assert (data["energy"]["import"]["units"] in ["kWh", "Wh"])
-        assert (data["power"]["units"] in ["kW", "W"])
+        assert (meter_data["energy"]["import"]["units"] in ["kWh", "Wh"])
+        assert (meter_data["power"]["units"] in ["kW", "W"])
+
+        common_data = extract_common_data(meter_data, meter_type)
+        
         electricity_data = {
-            "elect_power": convert_to_watts(data["power"]["value"], data["power"]["units"]),
+            "elect_power_W": convert_to_watts(meter_data["power"]["value"], meter_data["power"]["units"]),
         }
 
-
-        response_payload = {**common_data , **electricity_data}
+        response_payload = {**common_data, **electricity_data}
 
     elif "gasmeter" in payload:
         meter_type = "gas"
-        data = payload["gasmeter"]
+        meter_data = payload["gasmeter"]
         # check the units match what we're expecting.
-        # we rely on import.units being the same as import.dayweekmonthvolunits
-        assert (data["energy"]["import"]["units"] in ["kWh", "Wh"])
-        assert (data["energy"]["import"]["cumulativevolunits"] == "m3")
+        assert (meter_data["energy"]["import"]["units"] in ["kWh", "Wh"])
+        cumulativevolunits = meter_data["energy"]["import"]["cumulativevolunits"]
+        assert (cumulativevolunits == "m3")
 
-        common_data = extract_common_data(data, meter_type)
+        common_data = extract_common_data(meter_data, meter_type)
 
-        dayweekmonthvolunits = data["energy"]["import"]["dayweekmonthvolunits"]
-        conveert_dayweekmonthvolunits = (dayweekmonthvolunits in ["kWh", "Wh"])
-        
-        gas_data = {
-            "gas_cumulativevol": data["energy"]["import"]["cumulativevol"],
         #   on my meter, these are always in kWh but i don't know if that's always the case
-        #   as it's 'vol', i assume it might be in m3 on some meters
-        #   so i'm conditionally converting to watts if the units are in [k]Wh
-            "gas_dayvol": convert_to_watts(data["energy"]["import"]["dayvol"],dayweekmonthvolunits) if conveert_dayweekmonthvolunits else data["energy"]["import"]["dayvol"],
-            "gas_weekvol": convert_to_watts(data["energy"]["import"]["weekvol"],dayweekmonthvolunits) if conveert_dayweekmonthvolunits else data["energy"]["import"]["weekvol"],
-            "gas_monthvol": convert_to_watts(data["energy"]["import"]["monthvol"],dayweekmonthvolunits) if conveert_dayweekmonthvolunits else data["energy"]["import"]["monthvol"],
+        #   if it's a volume in m3, then this will throw an error
+        dayweekmonthvolunits = meter_data["energy"]["import"]["dayweekmonthvolunits"]
+        assert (dayweekmonthvolunits in ["kWh", "Wh"])
+
+        gas_data = {
+            f"gas_cumulativevol_{cumulativevolunits}": meter_data["energy"]["import"]["cumulativevol"],
+            "gas_dayvol_kWh": convert_to_kwh(meter_data["energy"]["import"]["dayvol"], dayweekmonthvolunits),
+            "gas_weekvol_kWh": convert_to_kwh(meter_data["energy"]["import"]["weekvol"], dayweekmonthvolunits),
+            "gas_monthvol_kWh": convert_to_kwh(meter_data["energy"]["import"]["monthvol"], dayweekmonthvolunits),
         }
-
-
 
         response_payload = {**common_data, **gas_data}
 
@@ -167,26 +166,29 @@ def on_message(_client, _userdata, message):
         }
 
         # logging.info("Full payload: %s", json.dumps(
-          #   response_payload, indent=2))   # Don't need this info printed
+        #   response_payload, indent=2))   # Don't need this info printed
 
         response = requests.get(f"{server}/input/post/{NODE}", params=params_to_send, timeout=4)
         if (response.status_code != 200) or (response.json() is None) or (not response.json()['success']):
             logging.error("Error sending data to emoncms: %s", response.text)
-            raise Exception("Error sending data to emoncms")
+            # don't throw error here, as it will stop the mqtt client
+            # raise Exception("Error sending data to emoncms")
 
 
 def extract_common_data(data: typing.Dict, prefix: str) -> typing.Dict:
     units = data['energy']['import']['units']
+    # always try and return kWh
     return_value = {
-        f"{prefix}_unitrate": data['energy']['import']['price']['unitrate'],
-        f"{prefix}_standingcharge": data['energy']['import']['price']['standingcharge'],
-        f"{prefix}_day": convert_to_watts(data['energy']['import']['day'], units),
-        f"{prefix}_week": convert_to_watts(data['energy']['import']['week'], units),
-        f"{prefix}_month": convert_to_watts(data['energy']['import']['month'], units),
-        f"{prefix}_cumulative": convert_to_watts(data['energy']['import']['cumulative'], units),
+        f"{prefix}_unitrate_gbp": data['energy']['import']['price']['unitrate'],
+        f"{prefix}_standingcharge_gbp": data['energy']['import']['price']['standingcharge'],
+        f"{prefix}_day_kWh": convert_to_kwh(data['energy']['import']['day'], units),
+        f"{prefix}_week_kWh": convert_to_kwh(data['energy']['import']['week'], units),
+        f"{prefix}_month_kWh": convert_to_kwh(data['energy']['import']['month'], units),
+        f"{prefix}_cumulative_kWh": convert_to_kwh(data['energy']['import']['cumulative'], units),
         "time": round(time.mktime(time.strptime(data["timestamp"], '%Y-%m-%dT%H:%M:%SZ'))),
     }
     return return_value
+
 
 def convert_to_watts(power: float, units: str) -> int:
 
@@ -195,8 +197,19 @@ def convert_to_watts(power: float, units: str) -> int:
     elif units in ["W", "Wh"]:
         return round(power)
     else:
-        raise ValueError(f"Unknown units: {units}")
+        logging.error("Unknown units: %s", units)
+        # don't throw error here, as it will stop the mqtt client
+        # raise ValueError(f"Unknown units: {units}")
 
+def convert_to_kwh(energy: float, units: str) -> float:
+    if units in ["kWh"]:
+        return energy
+    elif units in ["Wh"]:
+        return energy / 1000
+    else:
+        logging.error("Unknown units: %s", units)
+        # don't throw error here, as it will stop the mqtt client
+        # raise ValueError(f"Unknown units: {units}")
 
 def loop():
     logging.basicConfig(level=logging.DEBUG, format='%(message)s')

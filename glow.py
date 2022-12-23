@@ -52,6 +52,7 @@ ExecStart=/usr/bin/python3 /home/pi/glow.py
 WantedBy=multi-user.target
 
 """
+
 # Then save & exit and to ensure the glow.service runs on boot up - Do:  sudo systemctl enable glow.service
 
 # AS A VERY LAST CHECK - Do: sudo reboot then SSH in again and check the service is active with:  systemctl status glow.service
@@ -87,7 +88,7 @@ GLOW_LOGIN = "your user name"
 GLOW_PASSWORD = "your password"
 GLOW_DEVICE_ID = "BCDDC2C4ABD0"
 GLOW_MQTT_HOST = "192.168.17.4"
-GLOW_BASE_TOPIC = "glow/" + GLOW_DEVICE_ID + "/#"
+GLOW_BASE_TOPIC = f"glow/{GLOW_DEVICE_ID}/#"
 
 
 # Emoncms server configuration
@@ -177,24 +178,36 @@ def on_message(_client, _userdata, message):
 
 def extract_common_data(data: typing.Dict, prefix: str) -> typing.Dict:
     units = data['energy']['import']['units']
-    # always try and return kWh
-    return_value = {
-        f"{prefix}_unitrate_gbp": data['energy']['import']['price']['unitrate'],
-        f"{prefix}_standingcharge_gbp": data['energy']['import']['price']['standingcharge'],
-        f"{prefix}_day_kWh": convert_to_kwh(data['energy']['import']['day'], units),
-        f"{prefix}_week_kWh": convert_to_kwh(data['energy']['import']['week'], units),
-        f"{prefix}_month_kWh": convert_to_kwh(data['energy']['import']['month'], units),
-        f"{prefix}_cumulative_kWh": convert_to_kwh(data['energy']['import']['cumulative'], units),
-        "time": round(time.mktime(time.strptime(data["timestamp"], '%Y-%m-%dT%H:%M:%SZ'))),
+    return {
+        f"{prefix}_unitrate_gbp": data['energy']['import']['price'][
+            'unitrate'
+        ],
+        f"{prefix}_standingcharge_gbp": data['energy']['import']['price'][
+            'standingcharge'
+        ],
+        f"{prefix}_day_kWh": convert_to_kwh(
+            data['energy']['import']['day'], units
+        ),
+        f"{prefix}_week_kWh": convert_to_kwh(
+            data['energy']['import']['week'], units
+        ),
+        f"{prefix}_month_kWh": convert_to_kwh(
+            data['energy']['import']['month'], units
+        ),
+        f"{prefix}_cumulative_kWh": convert_to_kwh(
+            data['energy']['import']['cumulative'], units
+        ),
+        "time": round(
+            time.mktime(time.strptime(data["timestamp"], '%Y-%m-%dT%H:%M:%SZ'))
+        ),
     }
-    return return_value
 
 
 def convert_to_watts(power: float, units: str) -> int:
 
-    if units in ["kW", "kWh"]:
+    if units in {"kW", "kWh"}:
         return round(power * 1000)
-    elif units in ["W", "Wh"]:
+    elif units in {"W", "Wh"}:
         return round(power)
     else:
         logging.error("Unknown units: %s", units)
@@ -202,9 +215,9 @@ def convert_to_watts(power: float, units: str) -> int:
         # raise ValueError(f"Unknown units: {units}")
 
 def convert_to_kwh(energy: float, units: str) -> float:
-    if units in ["kWh"]:
+    if units in {"kWh"}:
         return energy
-    elif units in ["Wh"]:
+    elif units in {"Wh"}:
         return energy / 1000
     else:
         logging.error("Unknown units: %s", units)

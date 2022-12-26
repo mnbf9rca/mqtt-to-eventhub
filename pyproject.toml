@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "mqtt-to-eventhub"
+version = "0.1.0"
+description = ""
+authors = ["rob al <mnbf9rca@users.noreply.github.com>"]
+license = "MIT"
+readme = "README.md"
+packages = [{include = "mqtt_to_eventhub"}]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+paho-mqtt = "^1.6.1"
+types-paho-mqtt = "^1.6.0.1"
+python-dotenv-vault = "^0.2.0"
+azure-eventhub = "^5.10.1"
+azure-eventhub-checkpointstoreblob-aio = "^1.1.4"
+asyncio-mqtt = "^0.16.1"
+
+
+[tool.poetry.group.dev.dependencies]
+flake8 = "^6.0.0"
+black = "^22.12.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

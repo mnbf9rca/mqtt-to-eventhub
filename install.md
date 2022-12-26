@@ -1,6 +1,7 @@
 # how to run the script
 
 1. create a venv: `python -m venv .venv`
+2. activate: `source ./.venv/bin/activate`
 
 
 # how to install mqtt-to-timescale as a script

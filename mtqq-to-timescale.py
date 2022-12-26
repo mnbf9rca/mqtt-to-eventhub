@@ -8,47 +8,49 @@ inspired by:
   https://github.com/Energy-Sparks/energy-sparks_analytics/blob/782865e108e5c61a5b4bae647ba8d0c32ba3c6ef/script/meters/glow_mqtt_example.py
 licence: MIT
 """
+import asyncio
 import importlib
 import json
 import logging
 import os
 import time
-import typing
-import paho.mqtt.client as mqtt  # paho-mqtt is already installed in emon
-import requests
-logging.getLogger("requests").setLevel(logging.WARNING)
-logging.getLogger("urllib3").propagate = False
+
+# import typing
+
+import asyncio_mqtt as aiomqtt
+import paho.mqtt as mqtt
+
+from azure.eventhub import EventData
+from azure.eventhub import EventHubProducerClient
+from azure.eventhub.aio import EventHubProducerClient as AsyncEventHubProducerClient
+from azure.eventhub.exceptions import EventHubError
 
 
 # load dotenv only if it's available, otherwise assume environment variables are set
 dotenv_spec = importlib.util.find_spec("dotenv_vault")
-if (dotenv_spec is not None):
+if dotenv_spec is not None:
     print("loading dotenv")
     from dotenv_vault import load_dotenv
+
     load_dotenv()
 
-# Glow Stick configuration
-GLOW_LOGIN = "your user name"
-GLOW_PASSWORD = "your password"
-GLOW_DEVICE_ID = "BCDDC2C4ABD0"
-GLOW_MQTT_HOST = "192.168.17.4"
-GLOW_BASE_TOPIC = "glow/" + GLOW_DEVICE_ID + "/#"
+# MQTT configuration
+MQTT_LOGIN = os.environ.get("MQTT_LOGIN", None)
+MQTT_PASSWORD = os.environ.get("MQTT_PASSWORD", None)
+MQTT_HOST = os.environ.get("MQTT_HOST", "localhost")
+MQTT_PORT = int(os.environ.get("MQTT_PORT", 1883))
+MQTT_BASE_TOPIC = os.environ.get("MQTT_BASE_TOPIC", "#")
+
+# Azure Eventhub configuration
+EVENTHUB_CONN_STR = os.environ["EVENTHUB_CONN_STR"]
+EVENTHUB_NAME = os.environ["EVENTHUB_NAME"]
 
 
-# Emoncms server configuration
-emoncms_apikey = os.getenv("EMONCMS_APIKEY")
-emoncms_server = os.getenv("EMONCMS_SERVER", "127.0.0.1")
-server = f"https://{emoncms_server}"
-NODE = "#"  # Name of the Input(tag) created to receive the INPUT data
-
-# End of User inputs section ===============
-
-
-def on_connect(client, _userdata, _flags, result_code):
+def on_connect(client: aiomqtt.Client, _userdata, _flags, result_code: int):
     if result_code != mqtt.MQTT_ERR_SUCCESS:
         logging.error("Error connecting: %d", result_code)
         return
-    result_code, _message_id = client.subscribe(GLOW_BASE_TOPIC)
+    result_code, _message_id = client.subscribe(MQTT_BASE_TOPIC)
 
     if result_code != mqtt.MQTT_ERR_SUCCESS:
         logging.error("Couldn't subscribe: %d", result_code)
@@ -56,112 +58,123 @@ def on_connect(client, _userdata, _flags, result_code):
     logging.info("Connected and subscribed")
 
 
-def on_message(_client, _userdata, message):
-    payload = json.loads(message.payload)
-    response_payload = None
-    if "electricitymeter" in payload:
-        meter_type = "elect"
-        meter_data = payload["electricitymeter"]
-
-        # check the units match what we're expecting.
-        assert (meter_data["energy"]["import"]["units"] in ["kWh", "Wh"])
-        assert (meter_data["power"]["units"] in ["kW", "W"])
-
-        common_data = extract_common_data(meter_data, meter_type)
-
-        electricity_data = {
-            "elect_power_W": convert_to_watts(meter_data["power"]["value"], meter_data["power"]["units"]),
-        }
-
-        response_payload = {**common_data, **electricity_data}
-
-    elif "gasmeter" in payload:
-        meter_type = "gas"
-        meter_data = payload["gasmeter"]
-        # check the units match what we're expecting.
-        assert (meter_data["energy"]["import"]["units"] in ["kWh", "Wh"])
-        cumulativevolunits = meter_data["energy"]["import"]["cumulativevolunits"]
-        assert (cumulativevolunits == "m3")
-
-        common_data = extract_common_data(meter_data, meter_type)
-
-        #   on my meter, these are always in kWh but i don't know if that's always the case
-        #   if it's a volume in m3, then this will throw an error
-        dayweekmonthvolunits = meter_data["energy"]["import"]["dayweekmonthvolunits"]
-        assert (dayweekmonthvolunits in ["kWh", "Wh"])
-
-        gas_data = {
-            f"gas_cumulativevol_{cumulativevolunits}": meter_data["energy"]["import"]["cumulativevol"],
-            "gas_dayvol_kWh": convert_to_kwh(meter_data["energy"]["import"]["dayvol"], dayweekmonthvolunits),
-            "gas_weekvol_kWh": convert_to_kwh(meter_data["energy"]["import"]["weekvol"], dayweekmonthvolunits),
-            "gas_monthvol_kWh": convert_to_kwh(meter_data["energy"]["import"]["monthvol"], dayweekmonthvolunits),
-        }
-
-        response_payload = {**common_data, **gas_data}
-
-    if (response_payload is not None):
-        params_to_send = {
-            "apikey": emoncms_apikey,
-            "fulljson": json.dumps(response_payload),
-        }
-
-        # logging.info("Full payload: %s", json.dumps(
-        #   response_payload, indent=2))   # Don't need this info printed
-
-        response = requests.get(f"{server}/input/post/{NODE}", params=params_to_send, timeout=4)
-        if (response.status_code != 200) or (response.json() is None) or (not response.json()['success']):
-            logging.error("Error sending data to emoncms: %s", response.text)
-            # don't throw error here, as it will stop the mqtt client
-            # raise Exception("Error sending data to emoncms")
+async def on_message(_client: aiomqtt.Client, _userdata, message: aiomqtt.Message):
+    """
+    This is the callback function that is called when a message is received
+    receives any message from the MQTT broker
+    creates a json object with the data and metadata and sends
+    it to azure event hub
+    """
+    message_data = extract_data_from_message(message)
+    json_data = json.dumps(message_data)
+    await send_message_to_eventhub(eventhub_producer, json_data)
 
 
-def extract_common_data(data: typing.Dict, prefix: str) -> typing.Dict:
-    units = data['energy']['import']['units']
-    # always try and return kWh
-    return_value = {
-        f"{prefix}_unitrate_gbp": data['energy']['import']['price']['unitrate'],
-        f"{prefix}_standingcharge_gbp": data['energy']['import']['price']['standingcharge'],
-        f"{prefix}_day_kWh": convert_to_kwh(data['energy']['import']['day'], units),
-        f"{prefix}_week_kWh": convert_to_kwh(data['energy']['import']['week'], units),
-        f"{prefix}_month_kWh": convert_to_kwh(data['energy']['import']['month'], units),
-        f"{prefix}_cumulative_kWh": convert_to_kwh(data['energy']['import']['cumulative'], units),
-        "time": round(time.mktime(time.strptime(data["timestamp"], '%Y-%m-%dT%H:%M:%SZ'))),
+async def send_message_to_eventhub(producer: AsyncEventHubProducerClient, message: str):
+    """
+    Sends a message to the Azure Event Hub
+    """
+
+    with producer:
+        # event_data_batch = await producer.create_batch()
+        # event_data_batch.add(EventData(message))
+        try:
+            logging.info("Sending message to event hub: %s", message)
+            producer.send_event(EventData(message))
+            logging.info("total messages in queue %i", producer.total_buffered_event_count)
+            # producer.send_batch(event_data_batch)
+        except EventHubError as e:
+            logging.error("Error sending message to event hub: %s", e)
+
+
+async def sasync_end_message_to_eventhub(producer: AsyncEventHubProducerClient, message: str):
+    """
+    Sends a message to the Azure Event Hub
+    """
+
+    async with producer:
+        # event_data_batch = await producer.create_batch()
+        # event_data_batch.add(EventData(message))
+        try:
+            logging.info("Sending message to event hub: %s", message)
+            await producer.send_event(EventData(message))
+            logging.info("total messages in queue %i", producer.total_buffered_event_count)
+            # producer.send_batch(event_data_batch)
+        except EventHubError as e:
+            logging.error("Error sending message to event hub: %s", e)
+
+
+def extract_data_from_message(message: aiomqtt.Message) -> dict:
+    logging.info("Received message: %s", message.payload)
+    logging.info("Topic: %s", message.topic)
+    logging.info("QoS: %s", message.qos)
+    logging.info("Retain flag: %s", message.retain)
+
+    # create a json object with the data and metadata
+    data = {
+        "topic": message.topic.value,
+        "payload": message.payload.decode(),
+        "qos": message.qos,
+        "retain": message.retain,
+        "timestamp": time.time(),
     }
-    return return_value
-
-
-def convert_to_watts(power: float, units: str) -> int:
-
-    if units in ["kW", "kWh"]:
-        return round(power * 1000)
-    elif units in ["W", "Wh"]:
-        return round(power)
-    else:
-        logging.error("Unknown units: %s", units)
-        # don't throw error here, as it will stop the mqtt client
-        # raise ValueError(f"Unknown units: {units}")
-
-
-def convert_to_kwh(energy: float, units: str) -> float:
-    if units in ["kWh"]:
-        return energy
-    elif units in ["Wh"]:
-        return energy / 1000
-    else:
-        logging.error("Unknown units: %s", units)
-        # don't throw error here, as it will stop the mqtt client
-        # raise ValueError(f"Unknown units: {units}")
+    return data
 
 
 def loop():
-    logging.basicConfig(level=logging.DEBUG, format='%(message)s')
+    logging.basicConfig(level=logging.DEBUG, format="%(message)s")
     client = mqtt.Client()
-    # client.username_pw_set(GLOW_LOGIN, GLOW_PASSWORD)
+
+    if MQTT_LOGIN and MQTT_PASSWORD:
+        client.username_pw_set(MQTT_LOGIN, MQTT_PASSWORD)
     client.on_connect = on_connect
     client.on_message = on_message
-    client.connect(GLOW_MQTT_HOST)
+    client.subscribe(MQTT_BASE_TOPIC)
+    if MQTT_PORT:
+        client.connect(MQTT_HOST, MQTT_PORT)
+    else:
+        client.connect(MQTT_HOST)
     client.loop_forever()
 
 
+async def asyncLoop(client: aiomqtt.Client):
+    async with client:
+        await client.subscribe(MQTT_BASE_TOPIC)
+        async with client.messages() as messages:
+            await client.subscribe(MQTT_BASE_TOPIC)
+            async for message in messages:
+                await on_message(client, None, message)
+
+
+def on_success(events, pid):
+    # sending succeeded
+    logger.info(events, pid)
+
+
+def on_error(events, pid, error):
+    # sending failed
+    logger.error(events, pid, error)
+
+
 if __name__ == "__main__":
-    loop()
+    eventhub_producer = EventHubProducerClient.from_connection_string(
+        conn_str=EVENTHUB_CONN_STR,
+        eventhub_name=EVENTHUB_NAME,
+        buffered_mode=True,
+        max_wait_time=10,
+        on_success=on_success,
+        on_error=on_error
+    )
+    client = aiomqtt.Client(
+        hostname=MQTT_HOST,
+        port=MQTT_PORT,
+        username=MQTT_LOGIN,
+        password=MQTT_PASSWORD,
+    )
+    logger = logging.getLogger("azure.eventhub")
+    logger.setLevel(logging.WARNING)
+    # loop()
+    run_loop = asyncio.get_event_loop()
+    run_loop.run_until_complete(asyncLoop(client))
+
+# asyncio.run()

@@ -22,7 +22,6 @@ import paho.mqtt as mqtt
 
 from azure.eventhub import EventData
 from azure.eventhub import EventHubProducerClient
-from azure.eventhub.aio import EventHubProducerClient as AsyncEventHubProducerClient
 from azure.eventhub.exceptions import EventHubError
 
 
@@ -70,7 +69,7 @@ def on_message(_client: aiomqtt.Client, _userdata, message: aiomqtt.Message):
     send_message_to_eventhub(eventhub_producer, json_data)
 
 
-def send_message_to_eventhub(producer: AsyncEventHubProducerClient, message: str):
+def send_message_to_eventhub(producer: EventHubProducerClient, message: str):
     """
     Sends a message to the Azure Event Hub
     """
@@ -81,27 +80,6 @@ def send_message_to_eventhub(producer: AsyncEventHubProducerClient, message: str
         try:
             logging.info("Sending message to event hub: %s", message)
             producer.send_event(EventData(message))
-            logging.info(
-                "total messages in queue %i", producer.total_buffered_event_count
-            )
-            # producer.send_batch(event_data_batch)
-        except EventHubError as e:
-            logging.error("Error sending message to event hub: %s", e)
-
-
-async def async_end_message_to_eventhub(
-    producer: AsyncEventHubProducerClient, message: str
-):
-    """
-    Sends a message to the Azure Event Hub
-    """
-
-    async with producer:
-        # event_data_batch = await producer.create_batch()
-        # event_data_batch.add(EventData(message))
-        try:
-            logging.info("Sending message to event hub: %s", message)
-            await producer.send_event(EventData(message))
             logging.info(
                 "total messages in queue %i", producer.total_buffered_event_count
             )
@@ -161,7 +139,7 @@ def on_error(events, pid, error):
     # sending failed
     logger.error(events, pid, error)
 
-
+# create an event hub producer client and mqtt client
 eventhub_producer = EventHubProducerClient.from_connection_string(
     conn_str=EVENTHUB_CONN_STR,
     eventhub_name=EVENTHUB_NAME,
@@ -186,5 +164,3 @@ if __name__ == "__main__":
     # loop()
     run_loop = asyncio.get_event_loop()
     run_loop.run_until_complete(asyncLoop(client))
-
-# asyncio.run()

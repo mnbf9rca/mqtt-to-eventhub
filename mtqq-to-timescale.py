@@ -1,77 +1,21 @@
-# PURPOSE: To input Smart Meter data into emoncms (data obtained via a Hildebrand Glow Stick https://www.hildebrand.co.uk/our-products/glow-stick-wifi-cad/ )
-
-# With due acknowledgement to ndfred - a contributor to the Glowmarkt forum
-# https://gist.github.com/ndfred/b373eeafc4f5b0870c1b8857041289a9
-
-# Developed and tested on a Raspberry Pi running the Oct 2019 emon image updated to ver 10.2.6
-
-# HOW TO ...
-
-# It's simpler to set up the primary INPUT(tag) first before the script is run. The script can then just refer to this INPUT(tag)
-
-# Start by doing the following in an SSH terminal ...
-
-# Install mosquitto-clients with: sudo apt-get install mosquitto-clients
-
-# Then enter: node="Glow Stick"  # The chosen INPUT(tag) name
-# Check by doing: echo $node
-
-# Then enter:  curl --data "node=node&apikey=????????????" "http://127.0.0.1/input/post"    # use appropriate apikey
-
-# Ignore the message about the request containing no data
-# The INPUT(tag) (Glow Stick) will have been created but it will not be visible on the Inputs webpage until some input data is subsequently posted
-
-# Then copy this script file to  /home/pi  and make it executable with:  chmod +x /home/pi/glow.py    # using the chosen script name
-
-# Run the script with: /usr/bin/python3 /home/pi/glow.py    # using the chosen script name
-
-# All being well, Smart Meter data will appear in emoncms webpage Inputs and be refreshed every 10 secs - Power Now(W) and Daily & CUM Energy(kWh)
-
-# Create FEEDS using Log to Feed and add UNITS (pencil drop-down) to each
-
-# FINALLY ONCE THE SCRIPT RUNS OK: Create the glow.service and enable it so the script runs on boot up as follows:
-# Do: CTRL-C to stop the script then - Do: sudo nano /etc/systemd/system/glow.service  and copy & paste in the following (using the chosen script name) ...
-
 """
-
-[Unit]
-Description=Glow Stick service
-After=network.target
-After=mosquitto.service
-StartLimitIntervalSec=0
-
-[Service]
-Environment=EMONCMS_APIKEY="<APIKEYHERE>"
-Environment=EMONCMS_SERVER="emoncms.cynexia.net"
-Type=simple
-Restart=always
-RestartSec=1
-User=pi
-ExecStart=/usr/bin/python3 /home/pi/glow.py
-
-[Install]
-WantedBy=multi-user.target
-
+Purpose:
+  To collect data pushed to MQTT by a Hildebrand Glow Stick, hubitat 'homie' events,
+  and emonhub and push it to an Azure EventHub
+  From there, it can be picked up and pushed to a timescale database
+author: rob aleck github.com/mnbf9rca
+inspired by: 
+  https://github.com/Energy-Sparks/energy-sparks_analytics/blob/782865e108e5c61a5b4bae647ba8d0c32ba3c6ef/script/meters/glow_mqtt_example.py
+licence: MIT
 """
-# Then save & exit and to ensure the glow.service runs on boot up - Do:  sudo systemctl enable glow.service
-
-# AS A VERY LAST CHECK - Do: sudo reboot then SSH in again and check the service is active with:  systemctl status glow.service
-
-# Finally close the SSH terminal. The script/service will continue to run surviving any future reboots
-
-# ===============================================================================
-
 import importlib
 import json
 import logging
 import os
 import time
 import typing
-
 import paho.mqtt.client as mqtt  # paho-mqtt is already installed in emon
 import requests
-
-# reduce the amount of logging from the requests library
 logging.getLogger("requests").setLevel(logging.WARNING)
 logging.getLogger("urllib3").propagate = False
 
@@ -95,12 +39,7 @@ GLOW_BASE_TOPIC = "glow/" + GLOW_DEVICE_ID + "/#"
 emoncms_apikey = os.getenv("EMONCMS_APIKEY")
 emoncms_server = os.getenv("EMONCMS_SERVER", "127.0.0.1")
 server = f"https://{emoncms_server}"
-NODE = "Glow"  # Name of the Input(tag) created to receive the INPUT data
-
-# Name each of the data inputs associated with the newly created Input(tag)
-di1 = "Power Now"      # ref E_NOW below
-di2 = "Daily Energy"   # ref E_DAY below
-di3 = "CUM Energy"     # ref E_METER below
+NODE = "#"  # Name of the Input(tag) created to receive the INPUT data
 
 # End of User inputs section ===============
 
@@ -129,7 +68,7 @@ def on_message(_client, _userdata, message):
         assert (meter_data["power"]["units"] in ["kW", "W"])
 
         common_data = extract_common_data(meter_data, meter_type)
-        
+
         electricity_data = {
             "elect_power_W": convert_to_watts(meter_data["power"]["value"], meter_data["power"]["units"]),
         }
@@ -202,6 +141,7 @@ def convert_to_watts(power: float, units: str) -> int:
         # don't throw error here, as it will stop the mqtt client
         # raise ValueError(f"Unknown units: {units}")
 
+
 def convert_to_kwh(energy: float, units: str) -> float:
     if units in ["kWh"]:
         return energy
@@ -212,6 +152,7 @@ def convert_to_kwh(energy: float, units: str) -> float:
         # don't throw error here, as it will stop the mqtt client
         # raise ValueError(f"Unknown units: {units}")
 
+
 def loop():
     logging.basicConfig(level=logging.DEBUG, format='%(message)s')
     client = mqtt.Client()
@@ -220,6 +161,7 @@ def loop():
     client.on_message = on_message
     client.connect(GLOW_MQTT_HOST)
     client.loop_forever()
+
 
 if __name__ == "__main__":
     loop()

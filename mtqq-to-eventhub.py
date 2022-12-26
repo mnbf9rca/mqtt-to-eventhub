@@ -58,7 +58,7 @@ def on_connect(client: aiomqtt.Client, _userdata, _flags, result_code: int):
     logging.info("Connected and subscribed")
 
 
-async def on_message(_client: aiomqtt.Client, _userdata, message: aiomqtt.Message):
+def on_message(_client: aiomqtt.Client, _userdata, message: aiomqtt.Message):
     """
     This is the callback function that is called when a message is received
     receives any message from the MQTT broker
@@ -67,10 +67,10 @@ async def on_message(_client: aiomqtt.Client, _userdata, message: aiomqtt.Messag
     """
     message_data = extract_data_from_message(message)
     json_data = json.dumps(message_data)
-    await send_message_to_eventhub(eventhub_producer, json_data)
+    send_message_to_eventhub(eventhub_producer, json_data)
 
 
-async def send_message_to_eventhub(producer: AsyncEventHubProducerClient, message: str):
+def send_message_to_eventhub(producer: AsyncEventHubProducerClient, message: str):
     """
     Sends a message to the Azure Event Hub
     """
@@ -81,13 +81,17 @@ async def send_message_to_eventhub(producer: AsyncEventHubProducerClient, messag
         try:
             logging.info("Sending message to event hub: %s", message)
             producer.send_event(EventData(message))
-            logging.info("total messages in queue %i", producer.total_buffered_event_count)
+            logging.info(
+                "total messages in queue %i", producer.total_buffered_event_count
+            )
             # producer.send_batch(event_data_batch)
         except EventHubError as e:
             logging.error("Error sending message to event hub: %s", e)
 
 
-async def sasync_end_message_to_eventhub(producer: AsyncEventHubProducerClient, message: str):
+async def async_end_message_to_eventhub(
+    producer: AsyncEventHubProducerClient, message: str
+):
     """
     Sends a message to the Azure Event Hub
     """
@@ -98,7 +102,9 @@ async def sasync_end_message_to_eventhub(producer: AsyncEventHubProducerClient, 
         try:
             logging.info("Sending message to event hub: %s", message)
             await producer.send_event(EventData(message))
-            logging.info("total messages in queue %i", producer.total_buffered_event_count)
+            logging.info(
+                "total messages in queue %i", producer.total_buffered_event_count
+            )
             # producer.send_batch(event_data_batch)
         except EventHubError as e:
             logging.error("Error sending message to event hub: %s", e)
@@ -143,7 +149,7 @@ async def asyncLoop(client: aiomqtt.Client):
         async with client.messages() as messages:
             await client.subscribe(MQTT_BASE_TOPIC)
             async for message in messages:
-                await on_message(client, None, message)
+                on_message(client, None, message)
 
 
 def on_success(events, pid):
@@ -156,22 +162,26 @@ def on_error(events, pid, error):
     logger.error(events, pid, error)
 
 
+eventhub_producer = EventHubProducerClient.from_connection_string(
+    conn_str=EVENTHUB_CONN_STR,
+    eventhub_name=EVENTHUB_NAME,
+    buffered_mode=True,
+    max_wait_time=10,
+    on_success=on_success,
+    on_error=on_error,
+)
+
+
+client = aiomqtt.Client(
+    hostname=MQTT_HOST,
+    port=MQTT_PORT,
+    username=MQTT_LOGIN,
+    password=MQTT_PASSWORD,
+)
+
+logger = logging.getLogger("azure.eventhub")
+
 if __name__ == "__main__":
-    eventhub_producer = EventHubProducerClient.from_connection_string(
-        conn_str=EVENTHUB_CONN_STR,
-        eventhub_name=EVENTHUB_NAME,
-        buffered_mode=True,
-        max_wait_time=10,
-        on_success=on_success,
-        on_error=on_error
-    )
-    client = aiomqtt.Client(
-        hostname=MQTT_HOST,
-        port=MQTT_PORT,
-        username=MQTT_LOGIN,
-        password=MQTT_PASSWORD,
-    )
-    logger = logging.getLogger("azure.eventhub")
     logger.setLevel(logging.WARNING)
     # loop()
     run_loop = asyncio.get_event_loop()

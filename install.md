@@ -12,19 +12,18 @@ Do: CTRL-C to stop the script then - Do: sudo nano /etc/systemd/system/glow.serv
 
 ```bash
 [Unit]
-Description=Glow Stick service
+Description=MQTT to EventHub
 After=network.target
 After=mosquitto.service
 StartLimitIntervalSec=0
 
 [Service]
-Environment=EMONCMS_APIKEY="<APIKEYHERE>"
-Environment=EMONCMS_SERVER="emoncms.cynexia.net"
+Environment=DOTENV_KEY="<key>"
 Type=simple
 Restart=always
 RestartSec=1
 User=pi
-ExecStart=/usr/bin/python3 /home/pi/glow.py
+ExecStart=/usr/bin/python3 /home/pi/mqtt-to-eventhub.py
 
 [Install]
 WantedBy=multi-user.target

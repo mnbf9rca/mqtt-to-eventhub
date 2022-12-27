@@ -15,13 +15,13 @@ import logging
 import os
 import time
 
-# import typing
-
 import asyncio_mqtt as aiomqtt
 import paho.mqtt as mqtt
+import requests
 
 from azure.eventhub import EventData
 from azure.eventhub import EventHubProducerClient
+from azure.eventhub.aio import EventHubProducerClient as EventHubProducerClientAsync
 from azure.eventhub.exceptions import EventHubError
 
 
@@ -44,6 +44,15 @@ MQTT_BASE_TOPIC = os.environ.get("MQTT_BASE_TOPIC", "#")
 EVENTHUB_CONN_STR = os.environ["EVENTHUB_CONN_STR"]
 EVENTHUB_NAME = os.environ["EVENTHUB_NAME"]
 
+# optional configuraiton - if not set, will not poll
+HEALTHCHECK_URL = os.environ.get("HEALTHCHECK_URL", None)
+HEALTHCHECK_INTERVAL = int(os.environ.get("HEALTHCHECK_INTERVAL", 60))
+HEALTHCHECK_METHOD = os.environ.get("HEALTHCHECK_METHOD", "GET")
+# if set to true, use HTTP POST to send error data to healthcheck
+HEALTHCHECK_REPORT_ERRORS = (
+    os.environ.get("HEALTHCHECK_REPORT_ERRORS", "True") == "True"
+)
+
 
 def on_connect(client: aiomqtt.Client, _userdata, _flags, result_code: int):
     if result_code != mqtt.MQTT_ERR_SUCCESS:
@@ -64,9 +73,50 @@ def on_message(_client: aiomqtt.Client, _userdata, message: aiomqtt.Message):
     creates a json object with the data and metadata and sends
     it to azure event hub
     """
-    message_data = extract_data_from_message(message)
-    json_data = json.dumps(message_data)
-    send_message_to_eventhub(eventhub_producer, json_data)
+    try:
+        message_data = extract_data_from_message(message)
+        json_data = json.dumps(message_data)
+        send_message_to_eventhub(eventhub_producer, json_data)
+    except Exception as e:
+        log_error("Error sending message: %s", e)
+
+
+async def on_message_async(
+    _client: aiomqtt.Client, _userdata, message: aiomqtt.Message
+):
+    """
+    This is the callback function that is called when a message is received
+    receives any message from the MQTT broker
+    creates a json object with the data and metadata and sends
+    it to azure event hub
+    """
+    try:
+        message_data = extract_data_from_message(message)
+        json_data = json.dumps(message_data)
+        await send_message_to_eventhub_async(eventhub_producer_async, json_data)
+    except Exception as e:
+        log_error("Error sending message", e)
+
+
+async def send_message_to_eventhub_async(
+    producer: EventHubProducerClient, message: str
+):
+    """
+    Sends a message to the Azure Event Hub
+    """
+
+    async with producer:
+        # event_data_batch = await producer.create_batch()
+        # event_data_batch.add(EventData(message))
+        try:
+            logging.info("Sending message to event hub: %s", message)
+            await producer.send_event(EventData(message))
+            logging.info(
+                "total messages in queue %i", producer.total_buffered_event_count
+            )
+            # producer.send_batch(event_data_batch)
+        except EventHubError as e:
+            log_error("Error sending message to event hub", e)
 
 
 def send_message_to_eventhub(producer: EventHubProducerClient, message: str):
@@ -85,7 +135,7 @@ def send_message_to_eventhub(producer: EventHubProducerClient, message: str):
             )
             # producer.send_batch(event_data_batch)
         except EventHubError as e:
-            logging.error("Error sending message to event hub: %s", e)
+            log_error("Error sending message to event hub: %s", e)
 
 
 def extract_data_from_message(message: aiomqtt.Message) -> dict:
@@ -105,29 +155,35 @@ def extract_data_from_message(message: aiomqtt.Message) -> dict:
     return data
 
 
-def loop():
-    logging.basicConfig(level=logging.DEBUG, format="%(message)s")
-    client = mqtt.Client()
-
-    if MQTT_LOGIN and MQTT_PASSWORD:
-        client.username_pw_set(MQTT_LOGIN, MQTT_PASSWORD)
-    client.on_connect = on_connect
-    client.on_message = on_message
-    client.subscribe(MQTT_BASE_TOPIC)
-    if MQTT_PORT:
-        client.connect(MQTT_HOST, MQTT_PORT)
-    else:
-        client.connect(MQTT_HOST)
-    client.loop_forever()
-
-
 async def asyncLoop(client: aiomqtt.Client):
     async with client:
         await client.subscribe(MQTT_BASE_TOPIC)
         async with client.messages() as messages:
             await client.subscribe(MQTT_BASE_TOPIC)
             async for message in messages:
-                on_message(client, None, message)
+                await on_message_async(client, None, message)
+
+
+def log_error(error: Exception, *args) -> None:
+    # handle the error
+    full_error = f"{error} {args}"
+    logger.error(full_error)
+    if HEALTHCHECK_URL:
+        if HEALTHCHECK_REPORT_ERRORS:
+            requests.post(HEALTHCHECK_URL, data={"error": full_error})
+
+
+def poll_healthcheck():
+    if HEALTHCHECK_URL:
+        try:
+            if HEALTHCHECK_METHOD == "GET":
+                requests.get(HEALTHCHECK_URL)
+            elif HEALTHCHECK_METHOD == "POST":
+                requests.post(HEALTHCHECK_URL)
+            else:
+                logger.error("Unknown healthcheck method: %s", HEALTHCHECK_METHOD)
+        except Exception as e:
+            log_error(e)
 
 
 def on_success(events, pid):
@@ -135,9 +191,15 @@ def on_success(events, pid):
     logger.info(events, pid)
 
 
+async def on_success_async(events, pid):
+    # sending succeeded
+    logger.info(events, pid)
+
+
 def on_error(events, pid, error):
     # sending failed
-    logger.error(events, pid, error)
+    log_error(events, pid, error)
+
 
 # create an event hub producer client and mqtt client
 eventhub_producer = EventHubProducerClient.from_connection_string(
@@ -147,6 +209,16 @@ eventhub_producer = EventHubProducerClient.from_connection_string(
     max_wait_time=10,
     on_success=on_success,
     on_error=on_error,
+)
+
+eventhub_producer_async: EventHubProducerClient = (
+    EventHubProducerClientAsync.from_connection_string(
+        conn_str=EVENTHUB_CONN_STR,
+        eventhub_name=EVENTHUB_NAME,
+        buffered_mode=False,
+        on_success=on_success_async,
+        on_error=on_error,
+    )
 )
 
 
@@ -162,5 +234,14 @@ logger = logging.getLogger("azure.eventhub")
 if __name__ == "__main__":
     logger.setLevel(logging.WARNING)
     # loop()
-    run_loop = asyncio.get_event_loop()
-    run_loop.run_until_complete(asyncLoop(client))
+    try:
+        run_loop = asyncio.get_event_loop()
+        run_loop.run_until_complete(asyncLoop(client))
+    except KeyboardInterrupt:
+        pass
+    except Exception as e:
+        log_error(e)
+    finally:
+        run_loop.close()
+        eventhub_producer.close()
+        eventhub_producer_async.close()

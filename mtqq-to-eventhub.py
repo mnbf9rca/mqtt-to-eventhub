@@ -99,7 +99,9 @@ async def on_message_async(
     return this_event_batch
 
 
-async def send_message_to_eventhub_async(producer: EventHubProducerClient, message_batch: EventDataBatch):
+async def send_message_to_eventhub_async(
+    producer: EventHubProducerClient, message_batch: EventDataBatch
+):
     """
     Checks if event_buffer.size_in_bytes   Sends a message to the Azure Event Hub
     """
@@ -133,6 +135,15 @@ def extract_data_from_message(message: aiomqtt.Message) -> dict:
 
 
 async def asyncLoop(eventhub_producer: EventHubProducerClient, client: aiomqtt.Client):
+    await asyncio.gather(
+        message_loop(eventhub_producer, client),
+        poll_healthceck_if_needed(),
+    )
+
+
+async def message_loop(
+    eventhub_producer: EventHubProducerClient, client: aiomqtt.Client
+):
     # create a new event batch
     event_batch = await eventhub_producer.create_batch(
         max_size_in_bytes=MAX_EVENT_BATCH_SIZE_BYTES
@@ -157,14 +168,22 @@ def log_error(error: Exception, *args) -> None:
 def poll_healthcheck():
     if HEALTHCHECK_URL:
         try:
-            if HEALTHCHECK_METHOD == "GET":
+            if HEALTHCHECK_METHOD.upper() == "GET":
                 requests.get(HEALTHCHECK_URL)
-            elif HEALTHCHECK_METHOD == "POST":
+            elif HEALTHCHECK_METHOD.upper() == "POST":
                 requests.post(HEALTHCHECK_URL)
             else:
-                logger.error("Unknown healthcheck method: %s", HEALTHCHECK_METHOD)
+                raise Exception("Unknown healthcheck method: %s", HEALTHCHECK_METHOD)
+            logger.info("Healthcheck successful")
         except Exception as e:
             log_error(e)
+
+
+async def poll_healthceck_if_needed():
+    if HEALTHCHECK_URL:
+        while True:
+            poll_healthcheck()
+            await asyncio.sleep(HEALTHCHECK_INTERVAL)
 
 
 async def on_success_async(events, pid):

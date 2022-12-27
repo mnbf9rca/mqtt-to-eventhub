@@ -4,18 +4,17 @@
    - see [Cryptography](https://cryptography.io/en/latest/installation/) for build requirements. 
    `sudo apt-get install-y cmake build-essential libssl-dev libffi-dev \
     python3-dev cargo pkg-config gcc musl-dev git-all`
-2. install Python 3.11. At the moment, the latest version for Raspbian from repo is 3.9, so follow [these instructions](https://raspberrytips.com/install-latest-python-raspberry-pi/).
-3. Go to your home folder: `cd ~`
+2. Go to your home folder: `cd ~`
 4. clone the folder:
 `git clone https://github.com/mnbf9rca/mqtt-to-eventhub.git`
 1. change to the follder: `cd mqqt-to-enventhub`
 2. copy `.env.example` to `.env` populate it with your values
-3. create a venv: `python3.1 -m venv .venv`
+3. create a venv: `python3.9 -m venv .venv`
 4. activate: `source ./.venv/bin/activate`
 5. This app uses Poetry as the package manager. Install Poetry using [a script from the Poetry website](https://python-poetry.org/docs/):
 `curl -sSL https://install.python-poetry.org | python3 -`
 1. Install requirements:
-`poetry -n -v install`
+`poetry -no-root -v install`
   - if `uamqp` fails to install see this [blog post](https://debruyn.dev/2020/installing-the-azure-event-hubs-python-sdk-on-raspberry-pi-os-64-bit/). I didnt have to do anything special - except it took like an hour to build and install using pip.
 1. Run:
 `python mqtt-to-eventhub.py`

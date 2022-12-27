@@ -1,6 +1,6 @@
 # mqtt-to-eventhub
 
-A basic python script to fetch messages from an MQTT broker and push them to an Azure Event Hub. Uses Async MQTT and Async Event Hub Producer to batch messages to make it more efficient.
+A basic python script to fetch messages from an MQTT broker and push them to an Azure Event Hub. Uses [Asyncio MQTT](https://github.com/sbtinstruments/asyncio-mqtt) and the async pattern from the [Azure Event Hub Client Library](https://github.com/Azure/azure-sdk-for-python/tree/main/sdk/eventhub/azure-eventhub) to batch messages to make it more efficient - it can easily handle a thousand or more messages per minute on my raspberry pi model 4 8gb. Because of the use of asyncio, it has a **minimum python version of 3.9**.
 
 # how to run the script
 

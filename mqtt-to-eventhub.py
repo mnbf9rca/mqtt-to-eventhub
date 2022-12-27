@@ -1,7 +1,7 @@
 """
 Purpose:
-  To collect data pushed to MQTT by a Hildebrand Glow Stick, hubitat 'homie' events,
-  and emonhub and push it to an Azure EventHub
+  To collect data pushed to MQTT (e.g. by a Hildebrand Glow Stick, hubitat 'homie' events,
+  and emonhub) and push it to an Azure EventHub
   From there, it can be picked up and pushed to a timescale database
 author: rob aleck github.com/mnbf9rca
 inspired by: 
@@ -27,12 +27,10 @@ from azure.eventhub.exceptions import EventHubError
 
 
 # load dotenv only if it's available, otherwise assume environment variables are set
-
 dotenv_spec = importlib.util.find_spec("dotenv_vault")
 if dotenv_spec is not None:
     print(f"loading dotenv from {os.getcwd()}")
     from dotenv_vault import load_dotenv
-
     load_dotenv(verbose=True)
 
 # MQTT configuration
@@ -59,6 +57,7 @@ HEALTHCHECK_REPORT_ERRORS = (
 
 
 def on_connect(client: aiomqtt.Client, _userdata, _flags, result_code: int):
+    """This is the callback function that is called when the client connects to the MQTT server."""
     if result_code != mqtt.MQTT_ERR_SUCCESS:
         logging.error("Error connecting: %d", result_code)
         return
@@ -72,14 +71,19 @@ def on_connect(client: aiomqtt.Client, _userdata, _flags, result_code: int):
 
 async def on_message_async(
     _client: aiomqtt.Client,
-    this_event_batch: EventDataBatch,
+    existing_event_batch: EventDataBatch,
     message: aiomqtt.Message,
-):
+) -> EventDataBatch:
     """
     This is the callback function that is called when a message is received
     receives any message from the MQTT broker
-    creates a json object with the data and metadata and sends
-    it to azure event hub
+    creates a json object with the data and metadata and adds it to the event batch
+    if the batch is full, sends it to the event hub and creates a new batch
+
+    @param client: the MQTT client
+    @param this_event_batch: the current batch of messages to send to the event hub
+    @param message: the message received from the MQTT broker
+    @return: the updated or new batch of messages to send to the event hub
     """
     try:
         message_data = extract_data_from_message(message)
@@ -88,24 +92,26 @@ async def on_message_async(
     except Exception as e:
         log_error("Error sending message", e)
     try:
-        this_event_batch.add(EventData(json_data))
+        existing_event_batch.add(EventData(json_data))
     except ValueError:
         # batch is full, send it and start a new one
-        await send_message_to_eventhub_async(eventhub_producer_async, this_event_batch)
-        event_batch: EventDataBatch = await eventhub_producer_async.create_batch(
+        await send_message_to_eventhub_async(eventhub_producer_async, existing_event_batch)
+        new_event_batch: EventDataBatch = await eventhub_producer_async.create_batch(
             max_size_in_bytes=MAX_EVENT_BATCH_SIZE_BYTES
         )
-        event_batch.add(EventData(json_data))
-        return event_batch
-    logging.info("total size of messages in queue %i", this_event_batch.size_in_bytes)
-    return this_event_batch
+        new_event_batch.add(EventData(json_data))
+        return new_event_batch
+    logging.info("total size of messages in queue %i", existing_event_batch.size_in_bytes)
+    return existing_event_batch
 
 
 async def send_message_to_eventhub_async(
     producer: EventHubProducerClient, message_batch: EventDataBatch
 ):
     """
-    Checks if event_buffer.size_in_bytes   Sends a message to the Azure Event Hub
+    sends a batch of messages to the event hub
+    @param producer: the event hub producer
+    @param message_batch: the batch of messages to send
     """
 
     # async with producer:
@@ -120,6 +126,12 @@ async def send_message_to_eventhub_async(
 
 
 def extract_data_from_message(message: aiomqtt.Message) -> dict:
+    """
+    creates a json object with the data and metadata
+    @param message: the message received from the MQTT broker
+    @return: the json object
+    """
+
     logging.info("Received message: %s", message.payload)
     logging.info("Topic: %s", message.topic)
     logging.info("QoS: %s", message.qos)
@@ -137,6 +149,14 @@ def extract_data_from_message(message: aiomqtt.Message) -> dict:
 
 
 async def asyncLoop(eventhub_producer: EventHubProducerClient, client: aiomqtt.Client):
+    """asyncLoop executes two async functions in parallel. The first function is the message loop
+    that receives messages from the MQTT broker and sends them to the event hub.
+    The second function is the healthcheck loop that polls a healthcheck endpoint if configured.
+
+    @param eventhub_producer: the event hub producer
+    @param client: the MQTT client
+
+    """
     await asyncio.gather(
         message_loop(eventhub_producer, client),
         poll_healthceck_if_needed(),
@@ -146,6 +166,11 @@ async def asyncLoop(eventhub_producer: EventHubProducerClient, client: aiomqtt.C
 async def message_loop(
     eventhub_producer: EventHubProducerClient, client: aiomqtt.Client
 ):
+    """
+    message_loop receives messages from the MQTT broker and sends them to the event hub.
+    @param eventhub_producer: the event hub producer
+    @param client: the MQTT client
+    """
     # create a new event batch
     event_batch = await eventhub_producer.create_batch(
         max_size_in_bytes=MAX_EVENT_BATCH_SIZE_BYTES
@@ -159,6 +184,11 @@ async def message_loop(
 
 
 def log_error(error: Exception, *args) -> None:
+    """
+    logs an error and reports it to the healthcheck endpoint if configured
+    @param error: the error to log
+    @param args: additional arguments to log
+    """
     # handle the error
     full_error = f"{error} {args}"
     logger.error(full_error)
@@ -168,6 +198,9 @@ def log_error(error: Exception, *args) -> None:
 
 
 def poll_healthcheck():
+    """
+    polls the healthcheck endpoint if configured
+    """
     if HEALTHCHECK_URL:
         try:
             if HEALTHCHECK_METHOD.upper() == "GET":
@@ -182,6 +215,10 @@ def poll_healthcheck():
 
 
 async def poll_healthceck_if_needed():
+    """
+    polls the healthcheck endpoint if configured
+    then sleeps for HEALTHCHECK_INTERVAL seconds
+    """
     if HEALTHCHECK_URL:
         while True:
             poll_healthcheck()
@@ -189,18 +226,22 @@ async def poll_healthceck_if_needed():
 
 
 async def on_success_async(events, pid):
+    """
+    this is the success handler for the event hub producer
+    """
     # sending succeeded
     logger.info(events, pid)
 
 
 def on_error(events, pid, error):
+    """
+    this is the error handler for the event hub producer
+    """
     # sending failed
     log_error(events, pid, error)
 
 
 # create an event hub producer client and mqtt client
-
-
 eventhub_producer_async: EventHubProducerClient = (
     EventHubProducerClientAsync.from_connection_string(
         conn_str=EVENTHUB_CONN_STR,
@@ -211,20 +252,6 @@ eventhub_producer_async: EventHubProducerClient = (
     )
 )
 
-eventhub_producer: EventHubProducerClient = (
-    EventHubProducerClient.from_connection_string(
-        conn_str=EVENTHUB_CONN_STR,
-        eventhub_name=EVENTHUB_NAME,
-        buffered_mode=False,
-        on_success=on_success_async,
-        on_error=on_error,
-    )
-)
-event_batch: EventDataBatch = eventhub_producer.create_batch(
-    max_size_in_bytes=MAX_EVENT_BATCH_SIZE_BYTES
-)
-print("initial event batch created: ", type(event_batch))
-eventhub_producer.close()
 
 client = aiomqtt.Client(
     hostname=MQTT_HOST,
@@ -236,6 +263,11 @@ client = aiomqtt.Client(
 logger = logging.getLogger()
 
 if __name__ == "__main__":
+    """
+    main function
+    """
+
+    # set up logging - reduce the log level to WARNING to reduce excessive logging i.e. SD wear
     logger.setLevel(logging.WARNING)
     logging.getLogger("uamqp").setLevel(logging.WARNING)  # Low level uAMQP are logged only for critical
     logging.getLogger("azure").setLevel(logging.WARNING)  # All azure clients are logged only for critical

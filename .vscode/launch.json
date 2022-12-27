@@ -5,10 +5,10 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Python: Current File",
+      "name": "Python: mqtt-to-eventhub",
       "type": "python",
       "request": "launch",
-      "program": "${file}",
+      "program": "mqtt-to-eventhub.py",
       "console": "integratedTerminal",
       "justMyCode": true
     }

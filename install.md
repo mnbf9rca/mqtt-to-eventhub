@@ -11,11 +11,19 @@
 2. copy `.env.example` to `.env` populate it with your values
 3. create a venv: `python3.9 -m venv .venv`
 4. activate: `source ./.venv/bin/activate`
-5. This app uses Poetry as the package manager. Install Poetry using [a script from the Poetry website](https://python-poetry.org/docs/):
+5. This app uses Poetry as the package manager. However Poetry [doesnt support alternative sources very well](https://github.com/python-poetry/poetry/issues/4854).
+
+## to use requirements.txt
+
+## to use poetry
+6. Install Poetry using [a script from the Poetry website](https://python-poetry.org/docs/):
 `curl -sSL https://install.python-poetry.org | python3 -`
+1. update Poetry to use PiWheels:
+`poetry config repositories.piwheels https://www.piwheels.org/simple/`
 1. Install requirements:
-`poetry -no-root -v install`
-  - if `uamqp` fails to install see this [blog post](https://debruyn.dev/2020/installing-the-azure-event-hubs-python-sdk-on-raspberry-pi-os-64-bit/). I didnt have to do anything special - except it took like an hour to build and install using pip.
+`poetry --no-dev --no-root -v install`
+
+## finally...
 1. Run:
 `python mqtt-to-eventhub.py`
 

@@ -162,3 +162,4 @@ cython_debug/
 .flaskenv*
 !.env.project
 !.env.vault
+!.env.example

@@ -21,6 +21,7 @@ import requests
 
 from azure.eventhub import EventData
 from azure.eventhub import EventHubProducerClient
+from azure.eventhub import EventDataBatch
 from azure.eventhub.aio import EventHubProducerClient as EventHubProducerClientAsync
 from azure.eventhub.exceptions import EventHubError
 
@@ -43,6 +44,7 @@ MQTT_BASE_TOPIC = os.environ.get("MQTT_BASE_TOPIC", "#")
 # Azure Eventhub configuration
 EVENTHUB_CONN_STR = os.environ["EVENTHUB_CONN_STR"]
 EVENTHUB_NAME = os.environ["EVENTHUB_NAME"]
+MAX_EVENT_BATCH_SIZE_BYTES = int(os.environ.get("MAX_EVENT_BATCH_SIZE", 5120))
 
 # optional configuraiton - if not set, will not poll
 HEALTHCHECK_URL = os.environ.get("HEALTHCHECK_URL", None)
@@ -66,23 +68,10 @@ def on_connect(client: aiomqtt.Client, _userdata, _flags, result_code: int):
     logging.info("Connected and subscribed")
 
 
-def on_message(_client: aiomqtt.Client, _userdata, message: aiomqtt.Message):
-    """
-    This is the callback function that is called when a message is received
-    receives any message from the MQTT broker
-    creates a json object with the data and metadata and sends
-    it to azure event hub
-    """
-    try:
-        message_data = extract_data_from_message(message)
-        json_data = json.dumps(message_data)
-        send_message_to_eventhub(eventhub_producer, json_data)
-    except Exception as e:
-        log_error("Error sending message: %s", e)
-
-
 async def on_message_async(
-    _client: aiomqtt.Client, _userdata, message: aiomqtt.Message
+    _client: aiomqtt.Client,
+    this_event_batch: EventDataBatch,
+    message: aiomqtt.Message,
 ):
     """
     This is the callback function that is called when a message is received
@@ -93,49 +82,37 @@ async def on_message_async(
     try:
         message_data = extract_data_from_message(message)
         json_data = json.dumps(message_data)
-        await send_message_to_eventhub_async(eventhub_producer_async, json_data)
+
     except Exception as e:
         log_error("Error sending message", e)
+    try:
+        this_event_batch.add(EventData(json_data))
+    except ValueError:
+        # batch is full, send it and start a new one
+        await send_message_to_eventhub_async(eventhub_producer_async, this_event_batch)
+        event_batch: EventDataBatch = await eventhub_producer_async.create_batch(
+            max_size_in_bytes=MAX_EVENT_BATCH_SIZE_BYTES
+        )
+        event_batch.add(EventData(json_data))
+        return event_batch
+    logging.info("total size of messages in queue %i", this_event_batch.size_in_bytes)
+    return this_event_batch
 
 
-async def send_message_to_eventhub_async(
-    producer: EventHubProducerClient, message: str
-):
+async def send_message_to_eventhub_async(producer: EventHubProducerClient, message_batch: EventDataBatch):
     """
-    Sends a message to the Azure Event Hub
-    """
-
-    async with producer:
-        # event_data_batch = await producer.create_batch()
-        # event_data_batch.add(EventData(message))
-        try:
-            logging.info("Sending message to event hub: %s", message)
-            await producer.send_event(EventData(message))
-            logging.info(
-                "total messages in queue %i", producer.total_buffered_event_count
-            )
-            # producer.send_batch(event_data_batch)
-        except EventHubError as e:
-            log_error("Error sending message to event hub", e)
-
-
-def send_message_to_eventhub(producer: EventHubProducerClient, message: str):
-    """
-    Sends a message to the Azure Event Hub
+    Checks if event_buffer.size_in_bytes   Sends a message to the Azure Event Hub
     """
 
-    with producer:
-        # event_data_batch = await producer.create_batch()
-        # event_data_batch.add(EventData(message))
-        try:
-            logging.info("Sending message to event hub: %s", message)
-            producer.send_event(EventData(message))
-            logging.info(
-                "total messages in queue %i", producer.total_buffered_event_count
-            )
-            # producer.send_batch(event_data_batch)
-        except EventHubError as e:
-            log_error("Error sending message to event hub: %s", e)
+    # async with producer:
+    # event_data_batch = await producer.create_batch()
+    # event_data_batch.add(EventData(message))
+    try:
+        logging.info("Sending queue of size %i", message_batch.size_in_bytes)
+        await producer.send_batch(message_batch)
+
+    except EventHubError as e:
+        log_error("Error sending message to event hub", e)
 
 
 def extract_data_from_message(message: aiomqtt.Message) -> dict:
@@ -155,13 +132,17 @@ def extract_data_from_message(message: aiomqtt.Message) -> dict:
     return data
 
 
-async def asyncLoop(client: aiomqtt.Client):
+async def asyncLoop(eventhub_producer: EventHubProducerClient, client: aiomqtt.Client):
+    # create a new event batch
+    event_batch = await eventhub_producer.create_batch(
+        max_size_in_bytes=MAX_EVENT_BATCH_SIZE_BYTES
+    )
     async with client:
         await client.subscribe(MQTT_BASE_TOPIC)
         async with client.messages() as messages:
             await client.subscribe(MQTT_BASE_TOPIC)
             async for message in messages:
-                await on_message_async(client, None, message)
+                event_batch = await on_message_async(client, event_batch, message)
 
 
 def log_error(error: Exception, *args) -> None:
@@ -186,11 +167,6 @@ def poll_healthcheck():
             log_error(e)
 
 
-def on_success(events, pid):
-    # sending succeeded
-    logger.info(events, pid)
-
-
 async def on_success_async(events, pid):
     # sending succeeded
     logger.info(events, pid)
@@ -202,14 +178,7 @@ def on_error(events, pid, error):
 
 
 # create an event hub producer client and mqtt client
-eventhub_producer = EventHubProducerClient.from_connection_string(
-    conn_str=EVENTHUB_CONN_STR,
-    eventhub_name=EVENTHUB_NAME,
-    buffered_mode=True,
-    max_wait_time=10,
-    on_success=on_success,
-    on_error=on_error,
-)
+
 
 eventhub_producer_async: EventHubProducerClient = (
     EventHubProducerClientAsync.from_connection_string(
@@ -221,6 +190,20 @@ eventhub_producer_async: EventHubProducerClient = (
     )
 )
 
+eventhub_producer: EventHubProducerClient = (
+    EventHubProducerClient.from_connection_string(
+        conn_str=EVENTHUB_CONN_STR,
+        eventhub_name=EVENTHUB_NAME,
+        buffered_mode=False,
+        on_success=on_success_async,
+        on_error=on_error,
+    )
+)
+event_batch: EventDataBatch = eventhub_producer.create_batch(
+    max_size_in_bytes=MAX_EVENT_BATCH_SIZE_BYTES
+)
+print("initial event batch created: ", type(event_batch))
+eventhub_producer.close()
 
 client = aiomqtt.Client(
     hostname=MQTT_HOST,
@@ -233,15 +216,16 @@ logger = logging.getLogger("azure.eventhub")
 
 if __name__ == "__main__":
     logger.setLevel(logging.WARNING)
-    # loop()
+
     try:
         run_loop = asyncio.get_event_loop()
-        run_loop.run_until_complete(asyncLoop(client))
+        run_loop.run_until_complete(
+            asyncLoop(eventhub_producer_async, client)
+        )  # , event_batch))
     except KeyboardInterrupt:
         pass
     except Exception as e:
         log_error(e)
     finally:
         run_loop.close()
-        eventhub_producer.close()
-        eventhub_producer_async.close()
+        asyncio.run(eventhub_producer_async.close())

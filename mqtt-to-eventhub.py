@@ -27,12 +27,13 @@ from azure.eventhub.exceptions import EventHubError
 
 
 # load dotenv only if it's available, otherwise assume environment variables are set
+
 dotenv_spec = importlib.util.find_spec("dotenv_vault")
 if dotenv_spec is not None:
-    print("loading dotenv")
+    print(f"loading dotenv from {os.getcwd()}")
     from dotenv_vault import load_dotenv
 
-    load_dotenv()
+    load_dotenv(verbose=True)
 
 # MQTT configuration
 MQTT_LOGIN = os.environ.get("MQTT_LOGIN", None)
@@ -232,10 +233,12 @@ client = aiomqtt.Client(
     password=MQTT_PASSWORD,
 )
 
-logger = logging.getLogger("azure.eventhub")
+logger = logging.getLogger()
 
 if __name__ == "__main__":
     logger.setLevel(logging.WARNING)
+    logging.getLogger("uamqp").setLevel(logging.WARNING)  # Low level uAMQP are logged only for critical
+    logging.getLogger("azure").setLevel(logging.WARNING)  # All azure clients are logged only for critical
 
     try:
         run_loop = asyncio.get_event_loop()

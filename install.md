@@ -34,8 +34,8 @@
 
 # how to install mqtt-to-eventhub as a script
 
-FINALLY ONCE THE SCRIPT RUNS OK: Create the glow.service and enable it so the script runs on boot up as follows:
-Do: CTRL-C to stop the script then - Do: sudo nano /etc/systemd/system/mqtttoeventhub.service  and copy & paste in the following (using the chosen script name) ...
+FINALLY ONCE THE SCRIPT RUNS OK: Create the mqtttoeventhub.service and enable it so the script runs on boot up as follows:
+Do: CTRL-C to stop the script then - Do: `sudo nano /etc/systemd/system/mqtttoeventhub.service`  and copy & paste in the following (using the chosen script name) ...
 
 The script below assumes the user is `pi`. If not, replace `pi` with the username you're using.
 
@@ -48,18 +48,19 @@ StartLimitIntervalSec=0
 
 [Service]
 Environment=DOTENV_KEY=""
+WorkingDirectory=/home/pi/mqtt-to-eventhub/
 Type=simple
 Restart=always
 RestartSec=1
 User=pi
-ExecStart=/home/pi/mqtt-to-eventhub/.venv/bin/python /home/pi/mqtt-to-eventhub.py
+ExecStart=/home/pi/mqtt-to-eventhub/.venv/bin/python /home/pi/mqtt-to-eventhub/mqtt-to-eventhub.py
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-Then save & exit and to ensure the glow.service runs on boot up - Do:  sudo systemctl enable glow.service
+Then save & exit and to ensure the mqtttoeventhub.service runs on boot up - Do:  `sudo systemctl enable mqtttoeventhub.service`
 
-AS A VERY LAST CHECK - Do: sudo reboot then SSH in again and check the service is active with:  systemctl status glow.service
+AS A VERY LAST CHECK - Do: sudo reboot then SSH in again and check the service is active with:  `systemctl status mqtttoeventhub.service`
 
 Finally close the SSH terminal. The script/service will continue to run surviving any future reboots

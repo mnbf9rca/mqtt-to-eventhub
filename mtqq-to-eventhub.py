@@ -48,6 +48,7 @@ MAX_EVENT_BATCH_SIZE_BYTES = int(os.environ.get("MAX_EVENT_BATCH_SIZE", 5120))
 
 # optional configuraiton - if not set, will not poll
 HEALTHCHECK_URL = os.environ.get("HEALTHCHECK_URL", None)
+HEALTCHECK_FAILURE_URL = os.environ.get("HEALTCHECK_FAILURE_URL", HEALTHCHECK_URL)
 HEALTHCHECK_INTERVAL = int(os.environ.get("HEALTHCHECK_INTERVAL", 60))
 HEALTHCHECK_METHOD = os.environ.get("HEALTHCHECK_METHOD", "GET")
 # if set to true, use HTTP POST to send error data to healthcheck
@@ -160,9 +161,9 @@ def log_error(error: Exception, *args) -> None:
     # handle the error
     full_error = f"{error} {args}"
     logger.error(full_error)
-    if HEALTHCHECK_URL:
+    if HEALTCHECK_FAILURE_URL:
         if HEALTHCHECK_REPORT_ERRORS:
-            requests.post(HEALTHCHECK_URL, data={"error": full_error})
+            requests.post(HEALTCHECK_FAILURE_URL, data={"error": full_error})
 
 
 def poll_healthcheck():

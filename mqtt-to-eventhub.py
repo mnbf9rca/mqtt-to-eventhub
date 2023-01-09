@@ -4,11 +4,12 @@ Purpose:
   and emonhub) and push it to an Azure EventHub
   From there, it can be picked up and pushed to a timescale database
 author: rob aleck github.com/mnbf9rca
-inspired by: 
+inspired by:
   https://github.com/Energy-Sparks/energy-sparks_analytics/blob/782865e108e5c61a5b4bae647ba8d0c32ba3c6ef/script/meters/glow_mqtt_example.py
 licence: MIT
 """
 import asyncio
+from datetime import datetime
 import importlib
 import json
 import logging
@@ -54,6 +55,11 @@ HEALTHCHECK_METHOD = os.environ.get("HEALTHCHECK_METHOD", "GET")
 HEALTHCHECK_REPORT_ERRORS = (
     os.environ.get("HEALTHCHECK_REPORT_ERRORS", "True") == "True"
 )
+# maximum time between between MQTT messages before we consider the source dead and signal an error
+MQTT_TIMEOUT = int(os.environ.get("MQTT_TIMEOUT", 120))  # seconds
+
+# time of last message received from MQTT; default to startup time to avoid false alarms
+last_mqtt_message_time: datetime = time.time()
 
 
 def on_connect(client: aiomqtt.Client, _userdata, _flags, result_code: int):
@@ -73,6 +79,7 @@ async def on_message_async(
     _client: aiomqtt.Client,
     existing_event_batch: EventDataBatch,
     message: aiomqtt.Message,
+    
 ) -> EventDataBatch:
     """
     This is the callback function that is called when a message is received
@@ -85,12 +92,16 @@ async def on_message_async(
     @param message: the message received from the MQTT broker
     @return: the updated or new batch of messages to send to the event hub
     """
+    # update the time of the last message received
+    global last_mqtt_message_time
+    last_mqtt_message_time = time.time()
     try:
         message_data = extract_data_from_message(message)
         json_data = json.dumps(message_data)
 
     except Exception as e:
-        log_error("Error sending message", e)
+        log_error("Error extracting message", e)
+
     try:
         existing_event_batch.add(EventData(json_data))
     except ValueError:
@@ -143,7 +154,7 @@ def extract_data_from_message(message: aiomqtt.Message) -> dict:
         "payload": message.payload.decode(),
         "qos": message.qos,
         "retain": message.retain,
-        "timestamp": time.time(),
+        "timestamp": time.time(),  # mqtt messages don't have a timestamp, so we add one
     }
     return data
 
@@ -158,8 +169,9 @@ async def asyncLoop(eventhub_producer: EventHubProducerClient, client: aiomqtt.C
 
     """
     await asyncio.gather(
-        message_loop(eventhub_producer, client),
-        poll_healthceck_if_needed(),
+        message_loop(eventhub_producer, client),  # check for messages from MQTT broker
+        poll_healthceck_if_needed(),  # poll healthcheck endpoint if configured
+        check_mqtt_timeout(),  # check for timeout of MQTT messages
     )
 
 
@@ -223,6 +235,19 @@ async def poll_healthceck_if_needed():
         while True:
             poll_healthcheck()
             await asyncio.sleep(HEALTHCHECK_INTERVAL)
+
+
+async def check_mqtt_timeout():
+    """
+    checks the last time that the MQTT client received a message
+    if it is longer ago than MQTT_TIMEOUT, then the MQTT connection is considered to be timed out
+    so we log an error. Note that we don't actually close the MQTT connection or try to reconnect
+    or fix the problem. We just log an error.
+    """
+    while True:
+        if time.time() - last_mqtt_message_time > MQTT_TIMEOUT:
+            log_error("MQTT connection timed out - last message received at %s", last_mqtt_message_time)
+        await asyncio.sleep(MQTT_TIMEOUT)
 
 
 async def on_success_async(events, pid):

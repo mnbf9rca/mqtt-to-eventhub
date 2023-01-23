@@ -43,20 +43,19 @@ aio = ["aiohttp (>=3.0)"]
 
 [[package]]
 name = "azure-eventhub"
-version = "5.10.1"
+version = "5.11.0"
 description = "Microsoft Azure Event Hubs Client Library for Python"
 category = "main"
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "azure-eventhub-5.10.1.zip", hash = "sha256:2d5fa8edd3150852107eaf5ddb0618df82e08483f914dd3acc3a543ed9042c54"},
-    {file = "azure_eventhub-5.10.1-py3-none-any.whl", hash = "sha256:2ccf36f1aee4b4f6eeb4ae27aaaf070152fdba051ae76d5c665ccbf7e2401f82"},
+    {file = "azure-eventhub-5.11.0.zip", hash = "sha256:81f8fdd3e43c4564fe8ca3c3dc3ab53e00106a2d566d3b40fe7c3369fda83a1b"},
+    {file = "azure_eventhub-5.11.0-py3-none-any.whl", hash = "sha256:09e988751858e62c51caec698b4e69da14e273615a2f688b57c6095ef2d34bf8"},
 ]
 
 [package.dependencies]
 azure-core = ">=1.14.0,<2.0.0"
 typing-extensions = ">=4.0.1"
-uamqp = ">=1.6.0,<2.0.0"
 
 [[package]]
 name = "black"
@@ -661,41 +660,6 @@ files = [
 ]
 
 [[package]]
-name = "uamqp"
-version = "1.6.3"
-description = "AMQP 1.0 Client Library for Python"
-category = "main"
-optional = false
-python-versions = ">=3.7"
-files = [
-    {file = "uamqp-1.6.3-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:8c89875c9bd106fcbe95d4e7621c7b98eb162be089c1b84dfb760cfcfa8b53a0"},
-    {file = "uamqp-1.6.3-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:a7e83b5d25ba4794198a7a2e5fc95d7a09c9fde023b3c8760680561967695c8a"},
-    {file = "uamqp-1.6.3-cp310-cp310-win32.whl", hash = "sha256:adcdfef70def14d040a961afaef89ae86725bf05057a5d8a8dd7ceb72fb671c2"},
-    {file = "uamqp-1.6.3-cp310-cp310-win_amd64.whl", hash = "sha256:8484455d322953a7ce45090603dc2700b49a10ce93310ca8699485776e163cf1"},
-    {file = "uamqp-1.6.3-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:cb55816521f2533a8b70c7fdaac98d53615b0d09d004173f6c63a69fccfbf05f"},
-    {file = "uamqp-1.6.3-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:c97eab724429dc7011577380e3a5d48aa760c1b1d3f56465e1984c4e81f7e03d"},
-    {file = "uamqp-1.6.3-cp311-cp311-win32.whl", hash = "sha256:94330ce1e40843c10a7811102b87eee4469f9ecefed200ab72d1d009a7ce9836"},
-    {file = "uamqp-1.6.3-cp311-cp311-win_amd64.whl", hash = "sha256:49909aafd8c5aa19f5dfed13aa03f2fff023408dbf2d909d233d8988961181c7"},
-    {file = "uamqp-1.6.3-cp37-cp37m-macosx_10_9_x86_64.whl", hash = "sha256:b0ed1f51ca5156c678112aefff8e413dbf19edaf1a8589f555edaa587add6bd4"},
-    {file = "uamqp-1.6.3-cp37-cp37m-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:e8ad8cb2ab18a7bc05e3776930cc68cabf6b7d0fa0b09e80a238fbfc760d3d3a"},
-    {file = "uamqp-1.6.3-cp37-cp37m-win32.whl", hash = "sha256:3b3d9bfc5bdb0cee720c0f0aecafaece7d69ea0b9e02cf638f22cd17063077fb"},
-    {file = "uamqp-1.6.3-cp37-cp37m-win_amd64.whl", hash = "sha256:6140a15ccce7fd9637808ca47a334d36ff74c6dea251979a0dc5335bc2d3ba49"},
-    {file = "uamqp-1.6.3-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:959702da3b7946ee4187d1eb9fc8caf6584304f38d563489090263e552bb7714"},
-    {file = "uamqp-1.6.3-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:be4496f207b96231121fdaf592b06cc494cab9bdedd1cfd151154eef3ef3d7e5"},
-    {file = "uamqp-1.6.3-cp38-cp38-win32.whl", hash = "sha256:cea26ad2ddc1d671f23d839c3200d325456cbb9fd4d96c9b43e79de8185e9b98"},
-    {file = "uamqp-1.6.3-cp38-cp38-win_amd64.whl", hash = "sha256:490eeb783b9fa3e2c4cc6f9809fb2523ff429f46c6cd01696acbfda6d3811db7"},
-    {file = "uamqp-1.6.3-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:9375d85ea921199572d8fc3e6af1048c18cbe08730560c0895b6aa0de2eeb9ec"},
-    {file = "uamqp-1.6.3-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:0185f5ea66b4f239798ec0833ebac2b3e401565ead73acefe1dae2a9697d31e9"},
-    {file = "uamqp-1.6.3-cp39-cp39-win32.whl", hash = "sha256:56cf15d20f540e9935d151fda64177b9dae65cb22d4f9b66638e0847fde61c32"},
-    {file = "uamqp-1.6.3-cp39-cp39-win_amd64.whl", hash = "sha256:44efbcf7d8d714c9e7ac43a95f4492f96d6f2163134b10907492a790e11df0ba"},
-    {file = "uamqp-1.6.3.tar.gz", hash = "sha256:7ce03eb4600d28a1deab4b866f377d4eae7fc9cdc67e3e88f788d5f1d683dc86"},
-]
-
-[package.dependencies]
-certifi = ">=2017.4.17"
-six = ">=1.0,<2.0"
-
-[[package]]
 name = "urllib3"
 version = "1.26.13"
 description = "HTTP library with thread-safe connection pooling, file post, and more."
@@ -736,4 +700,4 @@ testing = ["coverage (>=6.2)", "coverage-enable-subprocess (>=1)", "flaky (>=3.7
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.9"
-content-hash = "8b676f4e0b81e88b2316101d5e8e521f720dc64441b200a689eaf232a6bbaf98"
+content-hash = "daacd877216101b7b9a97c61f14f15342cd321926ec0f2a733b9147da3f97693"

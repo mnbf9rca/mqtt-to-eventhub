@@ -637,14 +637,14 @@ files = [
 
 [[package]]
 name = "types-paho-mqtt"
-version = "1.6.0.1"
+version = "1.6.0.2"
 description = "Typing stubs for paho-mqtt"
 category = "dev"
 optional = false
 python-versions = "*"
 files = [
-    {file = "types-paho-mqtt-1.6.0.1.tar.gz", hash = "sha256:55fedd890cf5a4cad4f968f6dde43a0fa886d8896a1936d3f14b6348655c20b5"},
-    {file = "types_paho_mqtt-1.6.0.1-py3-none-any.whl", hash = "sha256:6f6eace42fe2db311ee9a8a4ef5574a9c2f2fa95815d7acdce1574449b158af3"},
+    {file = "types-paho-mqtt-1.6.0.2.tar.gz", hash = "sha256:583903f4a76b9bbe05e2218493060dcb1148f8ba0df2016401335b743de0f496"},
+    {file = "types_paho_mqtt-1.6.0.2-py3-none-any.whl", hash = "sha256:5a47fa1b36589f1251c3286372efd608cdbc00f6e083fed969db4651f092d36a"},
 ]
 
 [[package]]
@@ -700,4 +700,4 @@ testing = ["coverage (>=6.2)", "coverage-enable-subprocess (>=1)", "flaky (>=3.7
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.9"
-content-hash = "39f91124aec2359854f561b492bae9dcfd2359f066abc9c2b1cff87a37203658"
+content-hash = "dbfcecc77b8d83742dbeae4bcf6e4ef2cfa7baa7fce8d2f711575433d0724969"

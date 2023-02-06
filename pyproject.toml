@@ -10,7 +10,7 @@ packages = [{include = "mqtt_to_eventhub"}]
 [tool.poetry.dependencies]
 python = "^3.9"
 paho-mqtt = "^1.6.1"
-python-dotenv-vault = "^0.2.0"
+python-dotenv-vault = "^0.4.1"
 azure-eventhub = "^5.11.1"
 asyncio-mqtt = "^0.16.1"
 requests = "^2.28.2"

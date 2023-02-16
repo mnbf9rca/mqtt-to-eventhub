@@ -90,7 +90,7 @@ async def on_message_async(
     _client: aiomqtt.Client,
     existing_event_batch: EventDataBatch,
     message: aiomqtt.Message,
-    
+
 ) -> EventDataBatch:
     """
     This is the callback function that is called when a message is received
@@ -218,7 +218,7 @@ async def message_loop(
         async with client.messages() as messages:
             logger.debug("iterating through messages")
             await client.subscribe(MQTT_BASE_TOPIC)
-            logger.debug("subscribed to base topic (%s)", MQTT_BASE_TOPIC) #  again (for some reason)?
+            logger.debug("subscribed to base topic (%s)", MQTT_BASE_TOPIC)  # again (for some reason)?
             async for message in messages:
                 logger.debug("processing event batch")
                 event_batch = await on_message_async(client, event_batch, message)
@@ -237,8 +237,8 @@ def log_error(error: Exception, *args) -> None:
     full_error = f"{error} {args}"
     logger.error(full_error)
     if HEALTCHECK_FAILURE_URL and HEALTHCHECK_REPORT_ERRORS:
-            requests.post(HEALTCHECK_FAILURE_URL, data={"error": full_error})
-            logger.debug("sent error report")
+        requests.post(HEALTCHECK_FAILURE_URL, data={"error": full_error})
+        logger.debug("sent error report")
 
 
 def poll_healthcheck():
@@ -285,7 +285,9 @@ async def check_mqtt_timeout():
     """
     while True:
         if time.time() - last_mqtt_message_time > MQTT_TIMEOUT:
-            log_error("No message received via MQTT for more than %s seconds - last message received at %s", MQTT_TIMEOUT, last_mqtt_message_time)
+            log_error("No message received via MQTT for more than %s seconds - last message received at %s",
+                      MQTT_TIMEOUT,
+                      last_mqtt_message_time)
         await asyncio.sleep(MQTT_TIMEOUT)
 
 

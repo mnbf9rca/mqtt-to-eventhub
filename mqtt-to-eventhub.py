@@ -61,18 +61,29 @@ MQTT_TIMEOUT = int(os.environ.get("MQTT_TIMEOUT", 120))  # seconds
 # time of last message received from MQTT; default to startup time to avoid false alarms
 last_mqtt_message_time: datetime = time.time()
 
+LOG_LEVEL = os.environ.get(("LOG_LEVEL", "WARNING"))
+
+# Create a new logger
+logger = logging.getLogger(__name__)
+
+# Set the log level based on the environment variable value
+if LOG_LEVEL in logging._nameToLevel:
+    logger.setLevel(LOG_LEVEL)
+else:
+    logger.setLevel(logging.INFO)
+
 
 def on_connect(client: aiomqtt.Client, _userdata, _flags, result_code: int):
     """This is the callback function that is called when the client connects to the MQTT server."""
     if result_code != mqtt.MQTT_ERR_SUCCESS:
-        logging.error("Error connecting: %d", result_code)
+        logger.error("Error connecting: %d", result_code)
         return
     result_code, _message_id = client.subscribe(MQTT_BASE_TOPIC)
 
     if result_code != mqtt.MQTT_ERR_SUCCESS:
-        logging.error("Couldn't subscribe: %d", result_code)
+        logger.error("Couldn't subscribe: %d", result_code)
         return
-    logging.info("Connected and subscribed")
+    logger.info("Connected and subscribed")
 
 
 async def on_message_async(
@@ -96,23 +107,33 @@ async def on_message_async(
     global last_mqtt_message_time
     last_mqtt_message_time = time.time()
     try:
+        logger.debug("attempting to extract message data")
         message_data = extract_data_from_message(message)
         json_data = json.dumps(message_data)
+        logger.debug("data extracted: %s", json_data)
 
     except Exception as e:
         log_error("Error extracting message", e)
 
     try:
+        logger.debug("attempting to add to existing batch")
         existing_event_batch.add(EventData(json_data))
+        logger.debug("added to existing batch")
+
     except ValueError:
         # batch is full, send it and start a new one
+        logger.debug("batch full, adding new batch")
+        logger.debug("calling send_message_to_eventhub_async")
         await send_message_to_eventhub_async(eventhub_producer_async, existing_event_batch)
+        logger.debug("creating new batch")
         new_event_batch: EventDataBatch = await eventhub_producer_async.create_batch(
             max_size_in_bytes=MAX_EVENT_BATCH_SIZE_BYTES
         )
+        logger.debug("new batch created")
         new_event_batch.add(EventData(json_data))
+        logger.debug("item added to new batch")
         return new_event_batch
-    logging.info("total size of messages in queue %i", existing_event_batch.size_in_bytes)
+    logger.info("total size of messages in queue %i", existing_event_batch.size_in_bytes)
     return existing_event_batch
 
 
@@ -129,9 +150,9 @@ async def send_message_to_eventhub_async(
     # event_data_batch = await producer.create_batch()
     # event_data_batch.add(EventData(message))
     try:
-        logging.info("Sending queue of size %i", message_batch.size_in_bytes)
+        logger.info("Sending queue of size %i", message_batch.size_in_bytes)
         await producer.send_batch(message_batch)
-
+        logger.debug("batch sent successfully")
     except EventHubError as e:
         log_error("Error sending message to event hub", e)
 
@@ -143,10 +164,10 @@ def extract_data_from_message(message: aiomqtt.Message) -> dict:
     @return: the json object
     """
 
-    logging.info("Received message: %s", message.payload)
-    logging.info("Topic: %s", message.topic)
-    logging.info("QoS: %s", message.qos)
-    logging.info("Retain flag: %s", message.retain)
+    logger.info("Received message: %s", message.payload)
+    logger.info("Topic: %s", message.topic)
+    logger.info("QoS: %s", message.qos)
+    logger.info("Retain flag: %s", message.retain)
 
     # create a json object with the data and metadata
     data = {
@@ -156,6 +177,7 @@ def extract_data_from_message(message: aiomqtt.Message) -> dict:
         "retain": message.retain,
         "timestamp": time.time(),  # mqtt messages don't have a timestamp, so we add one
     }
+    logger.debug("extracted: %s", data)
     return data
 
 
@@ -168,6 +190,7 @@ async def asyncLoop(eventhub_producer: EventHubProducerClient, client: aiomqtt.C
     @param client: the MQTT client
 
     """
+    logger.debug("initiating asyncLoop")
     await asyncio.gather(
         message_loop(eventhub_producer, client),  # check for messages from MQTT broker
         poll_healthceck_if_needed(),  # poll healthcheck endpoint if configured
@@ -184,14 +207,20 @@ async def message_loop(
     @param client: the MQTT client
     """
     # create a new event batch
+    logger.debug("creating new batch in message_loop")
     event_batch = await eventhub_producer.create_batch(
         max_size_in_bytes=MAX_EVENT_BATCH_SIZE_BYTES
     )
     async with client:
+        logger.debug("subscribing to base topic: %s", MQTT_BASE_TOPIC)
         await client.subscribe(MQTT_BASE_TOPIC)
+        logger.debug("subscribed to topic")
         async with client.messages() as messages:
+            logger.debug("iterating through messages")
             await client.subscribe(MQTT_BASE_TOPIC)
+            logger.debug("subscribed to base topic (%s)", MQTT_BASE_TOPIC) #  again (for some reason)?
             async for message in messages:
+                logger.debug("processing event batch")
                 event_batch = await on_message_async(client, event_batch, message)
 
 
@@ -202,24 +231,31 @@ def log_error(error: Exception, *args) -> None:
     @param args: additional arguments to log
     """
     # handle the error
+    logger.debug("entered log_error")
+    logger.debug("HEALTCHECK_FAILURE_URL: %s", HEALTCHECK_FAILURE_URL)
+    logger.debug("HEALTHCHECK_REPORT_ERRORS: %s", HEALTHCHECK_REPORT_ERRORS)
     full_error = f"{error} {args}"
     logger.error(full_error)
-    if HEALTCHECK_FAILURE_URL:
-        if HEALTHCHECK_REPORT_ERRORS:
+    if HEALTCHECK_FAILURE_URL and HEALTHCHECK_REPORT_ERRORS:
             requests.post(HEALTCHECK_FAILURE_URL, data={"error": full_error})
+            logger.debug("sent error report")
 
 
 def poll_healthcheck():
     """
     polls the healthcheck endpoint if configured
     """
+    logger.debug("entering poll_healthcheck")
+    logger.debug("HEALTHCHECK_URL is set to: %s", HEALTHCHECK_URL)
     if HEALTHCHECK_URL:
+        logger.debug("HEALTHCHECK_METHOD is set to: %s", HEALTHCHECK_METHOD)
         try:
             if HEALTHCHECK_METHOD.upper() == "GET":
                 requests.get(HEALTHCHECK_URL)
             elif HEALTHCHECK_METHOD.upper() == "POST":
                 requests.post(HEALTHCHECK_URL)
             else:
+                logger.error("Unknown healthcheck method: %s", HEALTHCHECK_METHOD)
                 raise Exception("Unknown healthcheck method: %s", HEALTHCHECK_METHOD)
             logger.info("Healthcheck successful")
         except Exception as e:
@@ -231,9 +267,12 @@ async def poll_healthceck_if_needed():
     polls the healthcheck endpoint if configured
     then sleeps for HEALTHCHECK_INTERVAL seconds
     """
+    logger.debug("entering poll_healthceck_if_needed")
+    logger.debug("HEALTHCHECK_URL is set to: %s", HEALTHCHECK_URL)
     if HEALTHCHECK_URL:
         while True:
             poll_healthcheck()
+            logger.debug("sleeping for: %s seconds", HEALTHCHECK_INTERVAL)
             await asyncio.sleep(HEALTHCHECK_INTERVAL)
 
 
@@ -246,7 +285,7 @@ async def check_mqtt_timeout():
     """
     while True:
         if time.time() - last_mqtt_message_time > MQTT_TIMEOUT:
-            log_error("MQTT connection timed out - last message received at %s", last_mqtt_message_time)
+            log_error("No message received via MQTT for more than %s seconds - last message received at %s", MQTT_TIMEOUT, last_mqtt_message_time)
         await asyncio.sleep(MQTT_TIMEOUT)
 
 
@@ -276,7 +315,7 @@ eventhub_producer_async: EventHubProducerClient = (
         on_error=on_error,
     )
 )
-
+logger.debug("created eventhub_producer_async")
 
 client = aiomqtt.Client(
     hostname=MQTT_HOST,
@@ -284,8 +323,8 @@ client = aiomqtt.Client(
     username=MQTT_LOGIN,
     password=MQTT_PASSWORD,
 )
+logger.debug("created client")
 
-logger = logging.getLogger()
 
 if __name__ == "__main__":
     """
@@ -293,7 +332,7 @@ if __name__ == "__main__":
     """
 
     # set up logging - reduce the log level to WARNING to reduce excessive logging i.e. SD wear
-    logger.setLevel(logging.WARNING)
+    # logger.setLevel(logging.WARNING) -> we do this above
     logging.getLogger("uamqp").setLevel(logging.WARNING)  # Low level uAMQP are logged only for critical
     logging.getLogger("azure").setLevel(logging.WARNING)  # All azure clients are logged only for critical
 
@@ -307,5 +346,10 @@ if __name__ == "__main__":
     except Exception as e:
         log_error(e)
     finally:
+        logger.debug("closing run_loop")
         run_loop.close()
+        logger.debug("run_loop closed")
+        logger.debug("closing eventhub_producer_async")
         asyncio.run(eventhub_producer_async.close())
+        logger.debug("eventhub_producer_async closed")
+        logger.info("shutdown complete")

@@ -169,15 +169,13 @@ def extract_data_from_message(message: aiomqtt.Message) -> dict:
     logging.info("QoS: %s", message.qos)
     logging.info("Retain flag: %s", message.retain)
 
-    # create a json object with the data and metadata
-    data = {
+    return {
         "topic": message.topic.value,
         "payload": message.payload.decode(),
         "qos": message.qos,
         "retain": message.retain,
         "timestamp": time.time(),  # mqtt messages don't have a timestamp, so we add one
     }
-    return data
 
 
 async def asyncLoop(eventhub_producer: EventHubProducerClient, client: aiomqtt.Client):
@@ -235,10 +233,9 @@ def log_error(error: Exception, *args) -> None:
     logger.debug("HEALTHCHECK_REPORT_ERRORS: %s", HEALTHCHECK_REPORT_ERRORS)
     full_error = f"{error} {args}"
     logger.error(full_error)
-    if HEALTCHECK_FAILURE_URL:
-        if HEALTHCHECK_REPORT_ERRORS:
-            requests.post(HEALTCHECK_FAILURE_URL, data={"error": full_error})
-            logger.debug("sent error report")
+    if HEALTCHECK_FAILURE_URL and HEALTHCHECK_REPORT_ERRORS:
+        requests.post(HEALTCHECK_FAILURE_URL, data={"error": full_error})
+        logger.debug("sent error report")
 
 
 def poll_healthcheck():

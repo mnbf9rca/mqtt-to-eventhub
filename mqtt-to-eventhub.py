@@ -61,7 +61,7 @@ MQTT_TIMEOUT = int(os.environ.get("MQTT_TIMEOUT", 120))  # seconds
 # time of last message received from MQTT; default to startup time to avoid false alarms
 last_mqtt_message_time: datetime = time.time()
 
-LOG_LEVEL = os.environ.get(("LOG_LEVEL", "WARNING"))
+LOG_LEVEL = os.environ.get("LOG_LEVEL", "WARNING")
 
 # Create a new logger
 logger = logging.getLogger(__name__)

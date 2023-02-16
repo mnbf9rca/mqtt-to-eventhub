@@ -150,7 +150,7 @@ async def send_message_to_eventhub_async(
     # event_data_batch = await producer.create_batch()
     # event_data_batch.add(EventData(message))
     try:
-        logging.info("Sending queue of size %i", message_batch.size_in_bytes)
+        logger.info("Sending queue of size %i", message_batch.size_in_bytes)
         await producer.send_batch(message_batch)
         logger.debug("batch sent successfully")
     except EventHubError as e:
@@ -164,10 +164,10 @@ def extract_data_from_message(message: aiomqtt.Message) -> dict:
     @return: the json object
     """
 
-    logging.info("Received message: %s", message.payload)
-    logging.info("Topic: %s", message.topic)
-    logging.info("QoS: %s", message.qos)
-    logging.info("Retain flag: %s", message.retain)
+    logger.info("Received message: %s", message.payload)
+    logger.info("Topic: %s", message.topic)
+    logger.info("QoS: %s", message.qos)
+    logger.info("Retain flag: %s", message.retain)
 
     # create a json object with the data and metadata
     data = {
@@ -177,6 +177,7 @@ def extract_data_from_message(message: aiomqtt.Message) -> dict:
         "retain": message.retain,
         "timestamp": time.time(),  # mqtt messages don't have a timestamp, so we add one
     }
+    logger.debug("extracted: %s", data)
     return data
 
 
@@ -235,8 +236,7 @@ def log_error(error: Exception, *args) -> None:
     logger.debug("HEALTHCHECK_REPORT_ERRORS: %s", HEALTHCHECK_REPORT_ERRORS)
     full_error = f"{error} {args}"
     logger.error(full_error)
-    if HEALTCHECK_FAILURE_URL:
-        if HEALTHCHECK_REPORT_ERRORS:
+    if HEALTCHECK_FAILURE_URL and HEALTHCHECK_REPORT_ERRORS:
             requests.post(HEALTCHECK_FAILURE_URL, data={"error": full_error})
             logger.debug("sent error report")
 

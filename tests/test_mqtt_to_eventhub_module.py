@@ -118,6 +118,7 @@ class TestProcessMessage:
                 mock_client, mock_event_data_batch, mock_message
         )
 
+        assert mock_send_message.call_count == 0
         actual_call = mock_event_data_batch.add.call_args
         actual_event_data = actual_call[0][0]  # Assuming add is called with one positional argument
         actual_event_data_json = actual_event_data.body_as_json("utf-8")
@@ -126,7 +127,7 @@ class TestProcessMessage:
     @pytest.mark.asyncio
     @freeze_time("2023-09-16 15:56:00")
     @patch("mqtt_to_eventhub_module.eventhub_producer_async", new_callable=AsyncMock)
-    @patch("mqtt_to_eventhub_module.send_message_to_eventhub_async")
+    @patch("mqtt_to_eventhub_module.send_message_to_eventhub_async", new_callable=AsyncMock)
     @patch("mqtt_to_eventhub_module.aiomqtt.Client")
     @patch("mqtt_to_eventhub_module.aiomqtt.Message")
     async def test_on_message_async_with_full_batch(self, mock_message, mock_client, mock_send_message, mock_producer):
@@ -163,13 +164,13 @@ class TestProcessMessage:
 
 
         # check existing patch was called
-        mock_event_data_batch.add.assert_called()
+        assert mock_event_data_batch.add.call_count == 1
 
         # check that send_message_to_eventhub_async was called
         mock_send_message.assert_called_with(mock_producer, mock_event_data_batch)
 
         # Assert that a new batch was created
-        mock_producer.create_batch.assert_called()
+        assert mock_producer.create_batch.call_count == 1
 
         actual_call = new_mock_event_data_batch.add.call_args
         actual_event_data = actual_call[0][0]  # Assuming add is called with one positional argument

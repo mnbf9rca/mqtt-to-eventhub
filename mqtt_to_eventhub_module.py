@@ -31,6 +31,12 @@ from dotenv_vault import load_dotenv
 # load dotenv only if it's available, otherwise assume environment variables are set
 #dotenv_spec = importlib.util.find_spec("dotenv_vault")
 #if dotenv_spec is not None:
+# print whether dotenv_key is populated
+if os.environ.get("DOTENV_KEY", None):
+    print("dotenv_key is populated")
+else:
+    print("dotenv_key is not populated")
+
 print(f"loading dotenv from {os.getcwd()}")
 load_dotenv(verbose=True)
 print("dotenv loaded")

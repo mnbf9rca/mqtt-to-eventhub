@@ -196,7 +196,6 @@ class TestSendToEventHub(unittest.TestCase):
         )
         mock_producer.send_batch.assert_called_with(mock_event_data_batch)
 
-
     @pytest.mark.asyncio
     @patch("mqtt_to_eventhub_module.log_error")
     @patch("mqtt_to_eventhub_module.EventHubProducerClient", new_callable=AsyncMock)
@@ -205,8 +204,12 @@ class TestSendToEventHub(unittest.TestCase):
         mock_producer.send_batch.side_effect = EventHubError("Test EventHubError")
         
         # Check if the exception is caught and log_error is called
-        await mqtt_to_eventhub_module.send_message_to_eventhub_async(mock_producer, mock_event_data_batch)
-        
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(
+            mqtt_to_eventhub_module.send_message_to_eventhub_async(
+                mock_producer, mock_event_data_batch
+            )
+        )        
         mock_producer.send_batch.assert_called_with(mock_event_data_batch)
         mock_log_error.assert_called_with("Error sending message to event hub", mock_producer.send_batch.side_effect)
 

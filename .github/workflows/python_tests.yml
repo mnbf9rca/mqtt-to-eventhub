@@ -1,0 +1,37 @@
+name: Python package
+
+on: [push]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10", "3.11"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+      - uses: snok/install-poetry@v1
+        with:
+          version: 1.6.1 # pin the version as they keep changing their APIs
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+      - name: Install dependencies
+        run: |
+          poetry install  --no-interaction --no-root
+          pip install ruff
+      - name: Lint with ruff
+        run: |
+          TARGET_VERSION=py$(echo ${{ matrix.python-version }} | tr -d '.')
+          # stop the build if there are Python syntax errors or undefined names
+          ruff --format=github --select=E9,F63,F7,F82 --target-version=$TARGET_VERSION .
+          # default set of ruff rules with GitHub Annotations
+          # ignore long lines
+          ruff --format=github --target-version=$TARGET_VERSION --ignore=E501 .
+      - name: Test with pytest
+        run: |
+          pytest

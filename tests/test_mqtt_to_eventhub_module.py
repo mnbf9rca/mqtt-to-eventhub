@@ -63,10 +63,10 @@ class TestAsyncLoop:
     @patch('mqtt_to_eventhub_module.message_loop', new_callable=AsyncMock)
     @patch('mqtt_to_eventhub_module.poll_healthceck_if_needed', new_callable=AsyncMock)
     @patch('mqtt_to_eventhub_module.check_mqtt_timeout', new_callable=AsyncMock)
-    @patch('asyncio.gather', new_callable=AsyncMock)
+    @patch('mqtt_to_eventhub_module.asyncio.gather', new_callable=AsyncMock)
     async def test_asyncLoop_calls_gather_with_functions(
-            self, mock_gather, mock_check_mqtt_timeout,
-            mock_poll_healthcheck_if_needed, mock_message_loop):
+            self, mock_gather, _mock_check_mqtt_timeout,
+            _mock_poll_healthcheck_if_needed, _mock_message_loop):
 
         # Mocked eventhub_producer and client
         mock_eventhub_producer = 'mock_eventhub_producer'
@@ -79,9 +79,10 @@ class TestAsyncLoop:
         assert mock_gather.call_count == 1
 
         # Verify it is called with the correct number of coroutines
-        # Have to do this because the mock coroutine objects are not 
-        # identical to the ones that asyncio.gather is called with. This 
-        # is expected because every time you 'await' a coroutine, 
+        # Have to do this rather than compare the objects passed
+        # because the mock coroutine objects are not
+        # identical to the ones that asyncio.gather is called with. This
+        # is expected because every time you 'await' a coroutine,
         # a new coroutine object is created.
         actual_coroutines = mock_gather.call_args[0]
         assert len(actual_coroutines) == 3

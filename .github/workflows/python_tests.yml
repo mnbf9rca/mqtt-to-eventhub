@@ -37,7 +37,7 @@ jobs:
           DOTENV_KEY: ${{ secrets.DOTENV_KEY }}
         run: |
           source .venv/bin/activate
-          pytest --cov mqtt_to_eventhub_module
+          pytest --cov mqtt_to_eventhub_module --cov-report=xml
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v3
         env:

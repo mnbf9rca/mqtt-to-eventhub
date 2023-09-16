@@ -63,10 +63,10 @@ class TestAsyncLoop:
     @patch('mqtt_to_eventhub_module.message_loop', new_callable=AsyncMock)
     @patch('mqtt_to_eventhub_module.poll_healthceck_if_needed', new_callable=AsyncMock)
     @patch('mqtt_to_eventhub_module.check_mqtt_timeout', new_callable=AsyncMock)
-    @patch('asyncio.gather', new_callable=AsyncMock)
+    @patch('mqtt_to_eventhub_module.asyncio.gather', new_callable=AsyncMock)
     async def test_asyncLoop_calls_gather_with_functions(
-            self, mock_gather, mock_check_mqtt_timeout,
-            mock_poll_healthcheck_if_needed, mock_message_loop):
+            self, mock_gather, _mock_check_mqtt_timeout,
+            _mock_poll_healthcheck_if_needed, _mock_message_loop):
 
         # Mocked eventhub_producer and client
         mock_eventhub_producer = 'mock_eventhub_producer'
@@ -79,9 +79,10 @@ class TestAsyncLoop:
         assert mock_gather.call_count == 1
 
         # Verify it is called with the correct number of coroutines
-        # Have to do this because the mock coroutine objects are not 
-        # identical to the ones that asyncio.gather is called with. This 
-        # is expected because every time you 'await' a coroutine, 
+        # Have to do this rather than compare the objects passed
+        # because the mock coroutine objects are not
+        # identical to the ones that asyncio.gather is called with. This
+        # is expected because every time you 'await' a coroutine,
         # a new coroutine object is created.
         actual_coroutines = mock_gather.call_args[0]
         assert len(actual_coroutines) == 3
@@ -118,6 +119,7 @@ class TestProcessMessage:
                 mock_client, mock_event_data_batch, mock_message
         )
 
+        assert mock_send_message.call_count == 0
         actual_call = mock_event_data_batch.add.call_args
         actual_event_data = actual_call[0][0]  # Assuming add is called with one positional argument
         actual_event_data_json = actual_event_data.body_as_json("utf-8")
@@ -126,7 +128,7 @@ class TestProcessMessage:
     @pytest.mark.asyncio
     @freeze_time("2023-09-16 15:56:00")
     @patch("mqtt_to_eventhub_module.eventhub_producer_async", new_callable=AsyncMock)
-    @patch("mqtt_to_eventhub_module.send_message_to_eventhub_async")
+    @patch("mqtt_to_eventhub_module.send_message_to_eventhub_async", new_callable=AsyncMock)
     @patch("mqtt_to_eventhub_module.aiomqtt.Client")
     @patch("mqtt_to_eventhub_module.aiomqtt.Message")
     async def test_on_message_async_with_full_batch(self, mock_message, mock_client, mock_send_message, mock_producer):
@@ -163,13 +165,13 @@ class TestProcessMessage:
 
 
         # check existing patch was called
-        mock_event_data_batch.add.assert_called()
+        assert mock_event_data_batch.add.call_count == 1
 
         # check that send_message_to_eventhub_async was called
         mock_send_message.assert_called_with(mock_producer, mock_event_data_batch)
 
         # Assert that a new batch was created
-        mock_producer.create_batch.assert_called()
+        assert mock_producer.create_batch.call_count == 1
 
         actual_call = new_mock_event_data_batch.add.call_args
         actual_event_data = actual_call[0][0]  # Assuming add is called with one positional argument

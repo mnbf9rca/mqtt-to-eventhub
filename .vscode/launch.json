@@ -10,7 +10,7 @@
       "request": "launch",
       "program": "mqtt-to-eventhub.py",
       "console": "integratedTerminal",
-      "justMyCode": false
+      "justMyCode": true
     }
   ]
 }

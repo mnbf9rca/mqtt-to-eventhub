@@ -1,9 +1,8 @@
 import asyncio
 import json
 import time
-import unittest
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import Mock, AsyncMock, MagicMock, patch
 
 import paho.mqtt.client as mqtt_client
 from azure.eventhub import EventData
@@ -13,7 +12,7 @@ from freezegun import freeze_time
 import mqtt_to_eventhub_module
 
 
-class TestBasicConnectivity(unittest.TestCase):
+class TestBasicConnectivity:
     @patch("mqtt_to_eventhub_module.aiomqtt.Client")
     @patch("mqtt_to_eventhub_module.subscribe")
     @patch("mqtt_to_eventhub_module.logger")
@@ -59,7 +58,7 @@ class TestBasicConnectivity(unittest.TestCase):
         mock_logger.error.assert_called()
 
 
-class TestAsyncLoop(unittest.IsolatedAsyncioTestCase):
+class TestAsyncLoop:
     @pytest.mark.asyncio
     @patch('mqtt_to_eventhub_module.message_loop', new_callable=AsyncMock)
     @patch('mqtt_to_eventhub_module.poll_healthceck_if_needed', new_callable=AsyncMock)
@@ -77,7 +76,7 @@ class TestAsyncLoop(unittest.IsolatedAsyncioTestCase):
         await mqtt_to_eventhub_module.asyncLoop(mock_eventhub_producer, mock_client)
 
         # Verify that asyncio.gather is called
-        self.assertEqual(mock_gather.call_count, 1)
+        assert mock_gather.call_count == 1
 
         # Verify it is called with the correct number of coroutines
         # Have to do this because the mock coroutine objects are not 
@@ -85,17 +84,17 @@ class TestAsyncLoop(unittest.IsolatedAsyncioTestCase):
         # is expected because every time you 'await' a coroutine, 
         # a new coroutine object is created.
         actual_coroutines = mock_gather.call_args[0]
-        self.assertEqual(len(actual_coroutines), 3)
+        assert len(actual_coroutines) == 3
 
 
-class TestProcessMessage(unittest.TestCase):
+class TestProcessMessage:
     @pytest.mark.asyncio
     @freeze_time("2023-09-16 15:56:00")
     @patch("mqtt_to_eventhub_module.eventhub_producer_async", new_callable=AsyncMock)    
     @patch("mqtt_to_eventhub_module.send_message_to_eventhub_async")
     @patch("mqtt_to_eventhub_module.aiomqtt.Client")
     @patch("mqtt_to_eventhub_module.aiomqtt.Message")
-    def test_on_message_async_with_empty_batch(self, mock_message, mock_client, mock_send_message, mock_producer):
+    async def test_on_message_async_with_empty_batch(self, mock_message, mock_client, mock_send_message, mock_producer):
         mock_event_data_batch = mock_client.create_batch(
             max_size_in_bytes=mqtt_to_eventhub_module.MAX_EVENT_BATCH_SIZE_BYTES
         )
@@ -115,17 +114,14 @@ class TestProcessMessage(unittest.TestCase):
         expected_event_data = EventData(json.dumps(expected_event_body))
         expected_event_data_json = expected_event_data.body_as_json("utf-8")
 
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(
-            mqtt_to_eventhub_module.on_message_async(
+        await mqtt_to_eventhub_module.on_message_async(
                 mock_client, mock_event_data_batch, mock_message
-            )
         )
 
         actual_call = mock_event_data_batch.add.call_args
         actual_event_data = actual_call[0][0]  # Assuming add is called with one positional argument
         actual_event_data_json = actual_event_data.body_as_json("utf-8")
-        self.assertEqual(expected_event_data_json, actual_event_data_json)
+        assert expected_event_data_json == actual_event_data_json
 
     @pytest.mark.asyncio
     @freeze_time("2023-09-16 15:56:00")
@@ -133,8 +129,8 @@ class TestProcessMessage(unittest.TestCase):
     @patch("mqtt_to_eventhub_module.send_message_to_eventhub_async")
     @patch("mqtt_to_eventhub_module.aiomqtt.Client")
     @patch("mqtt_to_eventhub_module.aiomqtt.Message")
-    def test_on_message_async_with_full_batch(self, mock_message, mock_client, mock_send_message, mock_producer):
-        mock_event_data_batch = unittest.mock.Mock()
+    async def test_on_message_async_with_full_batch(self, mock_message, mock_client, mock_send_message, mock_producer):
+        mock_event_data_batch = Mock()
         mock_event_data_batch.add.side_effect = ValueError("Batch is full")
 
         # Create a mock for the new batch
@@ -161,12 +157,10 @@ class TestProcessMessage(unittest.TestCase):
         expected_event_data = EventData(json.dumps(expected_event_body))
         expected_event_data_json = expected_event_data.body_as_json("utf-8")
 
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(
-            mqtt_to_eventhub_module.on_message_async(
+        await mqtt_to_eventhub_module.on_message_async(
                 mock_client, mock_event_data_batch, mock_message
-            )
         )
+
 
         # check existing patch was called
         mock_event_data_batch.add.assert_called()
@@ -180,20 +174,19 @@ class TestProcessMessage(unittest.TestCase):
         actual_call = new_mock_event_data_batch.add.call_args
         actual_event_data = actual_call[0][0]  # Assuming add is called with one positional argument
         actual_event_data_json = actual_event_data.body_as_json("utf-8")
-        self.assertEqual(expected_event_data_json, actual_event_data_json)
+        assert expected_event_data_json == actual_event_data_json
 
 
-class TestSendToEventHub(unittest.TestCase):
+class TestSendToEventHub:
     @pytest.mark.asyncio
     @patch("mqtt_to_eventhub_module.EventHubProducerClient", new_callable=AsyncMock)
     @patch("mqtt_to_eventhub_module.EventDataBatch")
-    def test_send_message_to_eventhub_async_succeeds(self, mock_event_data_batch, mock_producer):
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(
-            mqtt_to_eventhub_module.send_message_to_eventhub_async(
-                mock_producer, mock_event_data_batch
-            )
+    async def test_send_message_to_eventhub_async_succeeds(self, mock_event_data_batch, mock_producer):
+
+        await mqtt_to_eventhub_module.send_message_to_eventhub_async(
+            mock_producer, mock_event_data_batch
         )
+
         mock_producer.send_batch.assert_called_with(mock_event_data_batch)
 
     @pytest.mark.asyncio
@@ -204,18 +197,15 @@ class TestSendToEventHub(unittest.TestCase):
         mock_producer.send_batch.side_effect = EventHubError("Test EventHubError")
         
         # Check if the exception is caught and log_error is called
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(
-            mqtt_to_eventhub_module.send_message_to_eventhub_async(
-                mock_producer, mock_event_data_batch
-            )
-        )        
+        await mqtt_to_eventhub_module.send_message_to_eventhub_async(
+            mock_producer, mock_event_data_batch
+        )
+
         mock_producer.send_batch.assert_called_with(mock_event_data_batch)
         mock_log_error.assert_called_with("Error sending message to event hub", mock_producer.send_batch.side_effect)
 
 
-class TestHealthCheck(unittest.TestCase):
-    @pytest.mark.asyncio
+class TestHealthCheck:
     @patch("mqtt_to_eventhub_module.requests.post")
     def test_log_error(self, mock_post):
         mqtt_to_eventhub_module.HEALTCHECK_FAILURE_URL = "http://healthcheck"
@@ -225,7 +215,6 @@ class TestHealthCheck(unittest.TestCase):
             "http://healthcheck", data={"error": "Test Error ()"}
         )
 
-    @pytest.mark.asyncio
     @patch("mqtt_to_eventhub_module.requests.get")
     def test_poll_healthcheck(self, mock_get):
         mqtt_to_eventhub_module.HEALTHCHECK_URL = "http://healthcheck"
@@ -234,7 +223,7 @@ class TestHealthCheck(unittest.TestCase):
         mock_get.assert_called_with("http://healthcheck")
 
 
-class TestCheckMqttTimeout(unittest.IsolatedAsyncioTestCase):
+class TestCheckMqttTimeout:
     @pytest.mark.asyncio
     @patch("mqtt_to_eventhub_module.log_error")
     @patch("mqtt_to_eventhub_module.MQTT_TIMEOUT", new=1)  # Override the MQTT_TIMEOUT to 1 second for testing
@@ -254,6 +243,3 @@ class TestCheckMqttTimeout(unittest.IsolatedAsyncioTestCase):
             mqtt_to_eventhub_module.last_mqtt_message_time
         )
 
-
-if __name__ == "__main__":
-    unittest.main()

@@ -17,7 +17,7 @@ import os
 import time
 
 import asyncio_mqtt as aiomqtt
-import paho.mqtt as mqtt
+import paho.mqtt.client as mqtt_client
 import requests
 
 from azure.eventhub import EventData
@@ -75,12 +75,17 @@ else:
 
 def on_connect(client: aiomqtt.Client, _userdata, _flags, result_code: int):
     """This is the callback function that is called when the client connects to the MQTT server."""
-    if result_code != mqtt.MQTT_ERR_SUCCESS:
+    if result_code != mqtt_client.MQTT_ERR_SUCCESS:
         logger.error("Error connecting: %d", result_code)
         return
+    logger.info("Connected - calling subscribe")
+    subscribe(client)
+
+
+def subscribe(client:  aiomqtt.Client):
     result_code, _message_id = client.subscribe(MQTT_BASE_TOPIC)
 
-    if result_code != mqtt.MQTT_ERR_SUCCESS:
+    if result_code != mqtt_client.MQTT_ERR_SUCCESS:
         logger.error("Couldn't subscribe: %d", result_code)
         return
     logger.info("Connected and subscribed")
@@ -105,15 +110,19 @@ async def on_message_async(
     """
     # update the time of the last message received
     global last_mqtt_message_time
+    json_data = None
     last_mqtt_message_time = time.time()
     try:
         logger.debug("attempting to extract message data")
         message_data = extract_data_from_message(message)
         json_data = json.dumps(message_data)
         logger.debug("data extracted: %s", json_data)
-
+        if not json_data:
+            logger.error("json_data is empty")
+            return existing_event_batch
     except Exception as e:
         log_error("Error extracting message", e)
+        return existing_event_batch
 
     try:
         logger.debug("attempting to add to existing batch")

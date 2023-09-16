@@ -197,8 +197,9 @@ class TestSendToEventHub(unittest.TestCase):
         mock_producer.send_batch.assert_called_with(mock_event_data_batch)
 
 
+    @pytest.mark.asyncio
     @patch("mqtt_to_eventhub_module.log_error")
-    @patch("mqtt_to_eventhub_module.EventHubProducerClient")
+    @patch("mqtt_to_eventhub_module.EventHubProducerClient", new_callable=AsyncMock)
     @patch("mqtt_to_eventhub_module.EventDataBatch")
     async def test_send_message_to_eventhub_async_fails(self, mock_event_data_batch, mock_producer, mock_log_error):
         mock_producer.send_batch.side_effect = EventHubError("Test EventHubError")
@@ -212,7 +213,7 @@ class TestSendToEventHub(unittest.TestCase):
 
 class TestHealthCheck(unittest.TestCase):
     @pytest.mark.asyncio
-    @patch("mqtt_to_eventhub_module.requests.post", new_callable=AsyncMock)
+    @patch("mqtt_to_eventhub_module.requests.post")
     def test_log_error(self, mock_post):
         mqtt_to_eventhub_module.HEALTCHECK_FAILURE_URL = "http://healthcheck"
         mqtt_to_eventhub_module.HEALTHCHECK_REPORT_ERRORS = True
@@ -222,7 +223,7 @@ class TestHealthCheck(unittest.TestCase):
         )
 
     @pytest.mark.asyncio
-    @patch("mqtt_to_eventhub_module.requests.get", new_callable=AsyncMock)
+    @patch("mqtt_to_eventhub_module.requests.get")
     def test_poll_healthcheck(self, mock_get):
         mqtt_to_eventhub_module.HEALTHCHECK_URL = "http://healthcheck"
         mqtt_to_eventhub_module.HEALTHCHECK_METHOD = "GET"

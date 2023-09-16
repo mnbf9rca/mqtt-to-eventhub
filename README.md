@@ -2,6 +2,8 @@
 
 A basic python script to fetch messages from an MQTT broker and push them to an Azure Event Hub. Uses [Asyncio MQTT](https://github.com/sbtinstruments/asyncio-mqtt) and the async pattern from the [Azure Event Hub Client Library](https://github.com/Azure/azure-sdk-for-python/tree/main/sdk/eventhub/azure-eventhub) to batch messages to make it more efficient - it can easily handle a thousand or more messages per minute on my raspberry pi model 4 8gb. Because of the use of asyncio, it has a **minimum python version of 3.9**.
 
+Losely tested with Python versions 3.9, 3.10, 3.11.
+
 # how to run the script
 
 1. install build dependencies
@@ -15,11 +17,15 @@ A basic python script to fetch messages from an MQTT broker and push them to an 
 2. copy `.env.example` to `.env` populate it with your values
 3. create a venv: `python3.9 -m venv .venv`
 4. activate: `source ./.venv/bin/activate`
-6. This app uses Poetry as the package manager. However Poetry [doesnt support alternative sources very well](https://github.com/python-poetry/poetry/issues/4854). That means that it ignores https://www.piwheels.org/ and tries to build `uamqp` from scratch - which means building `scipy` from scratch, which takes literally hours. Instead, the package dependencies are exported to `requirements.txt`. It'll still take a while (for some reason it still builds Cryptography) but not nearly as long.
+6. Install Poetry using [a script from the Poetry website](https://python-poetry.org/docs/):
+`curl -sSL https://install.python-poetry.org | python3 -`
+
+This app uses Poetry as the package manager. However Poetry [doesnt support alternative sources very well](https://github.com/python-poetry/poetry/issues/4854). That means that it ignores https://www.piwheels.org/ and tries to build `uamqp` from scratch - which means building `scipy` from scratch, which takes literally hours. Instead, we can choose to export the package dependencies to a requirements.txt file, It'll still take a while (for some reason it still builds Cryptography) but not nearly as long.
 
 
 ## option 1 - use requirements.txt
 
+1. [export](https://python-poetry.org/docs/cli/#export) the requirements: `poetry export --format requirements.txt --output requirements.txt`
 5. install setuptools and wheel:
 `pip install wheel setuptools`
 1. use pip to install:
@@ -27,10 +33,9 @@ A basic python script to fetch messages from an MQTT broker and push them to an 
 
 ## option 2 - use poetry (e.g. on a VM or something more powerful)
 
-6. Install Poetry using [a script from the Poetry website](https://python-poetry.org/docs/):
-`curl -sSL https://install.python-poetry.org | python3 -`
+
 1. Install requirements:
-`poetry --no-dev --no-root -v install`
+`poetry install --without test,dev --no-root --verbose`
 
 ## finally...
 1. Run:

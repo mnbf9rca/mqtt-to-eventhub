@@ -33,6 +33,7 @@ if dotenv_spec is not None:
     print(f"loading dotenv from {os.getcwd()}")
     from dotenv_vault import load_dotenv
     load_dotenv(verbose=True)
+    print("dotenv loaded")
 
 # MQTT configuration
 MQTT_LOGIN = os.environ.get("MQTT_LOGIN", None)

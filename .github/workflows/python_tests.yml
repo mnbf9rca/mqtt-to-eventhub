@@ -22,7 +22,7 @@ jobs:
           virtualenvs-in-project: true
       - name: Install dependencies
         run: |
-          poetry install --with dev --no-interaction --no-root
+          poetry install --with test --without dev  --no-interaction --no-root --sync
           pip install ruff
       - name: Lint with ruff
         run: |
@@ -34,4 +34,5 @@ jobs:
           ruff --format=github --target-version=$TARGET_VERSION --ignore=E501 .
       - name: Test with pytest
         run: |
+          source .venv/bin/activate
           pytest

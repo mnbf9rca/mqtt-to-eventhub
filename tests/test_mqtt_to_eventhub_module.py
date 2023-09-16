@@ -2,6 +2,7 @@ import asyncio
 import json
 import time
 import unittest
+import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import paho.mqtt.client as mqtt_client
@@ -59,7 +60,7 @@ class TestBasicConnectivity(unittest.TestCase):
 
 
 class TestAsyncLoop(unittest.IsolatedAsyncioTestCase):
-
+    @pytest.mark.asyncio
     @patch('mqtt_to_eventhub_module.message_loop', new_callable=AsyncMock)
     @patch('mqtt_to_eventhub_module.poll_healthceck_if_needed', new_callable=AsyncMock)
     @patch('mqtt_to_eventhub_module.check_mqtt_timeout', new_callable=AsyncMock)
@@ -88,6 +89,7 @@ class TestAsyncLoop(unittest.IsolatedAsyncioTestCase):
 
 
 class TestProcessMessage(unittest.TestCase):
+    @pytest.mark.asyncio
     @freeze_time("2023-09-16 15:56:00")
     @patch("mqtt_to_eventhub_module.eventhub_producer_async", new_callable=AsyncMock)    
     @patch("mqtt_to_eventhub_module.send_message_to_eventhub_async")
@@ -125,6 +127,7 @@ class TestProcessMessage(unittest.TestCase):
         actual_event_data_json = actual_event_data.body_as_json("utf-8")
         self.assertEqual(expected_event_data_json, actual_event_data_json)
 
+    @pytest.mark.asyncio
     @freeze_time("2023-09-16 15:56:00")
     @patch("mqtt_to_eventhub_module.eventhub_producer_async", new_callable=AsyncMock)
     @patch("mqtt_to_eventhub_module.send_message_to_eventhub_async")
@@ -181,6 +184,7 @@ class TestProcessMessage(unittest.TestCase):
 
 
 class TestSendToEventHub(unittest.TestCase):
+    @pytest.mark.asyncio
     @patch("mqtt_to_eventhub_module.EventHubProducerClient", new_callable=AsyncMock)
     @patch("mqtt_to_eventhub_module.EventDataBatch")
     def test_send_message_to_eventhub_async_succeeds(self, mock_event_data_batch, mock_producer):
@@ -207,7 +211,8 @@ class TestSendToEventHub(unittest.TestCase):
 
 
 class TestHealthCheck(unittest.TestCase):
-    @patch("mqtt_to_eventhub_module.requests.post")
+    @pytest.mark.asyncio
+    @patch("mqtt_to_eventhub_module.requests.post", new_callable=AsyncMock)
     def test_log_error(self, mock_post):
         mqtt_to_eventhub_module.HEALTCHECK_FAILURE_URL = "http://healthcheck"
         mqtt_to_eventhub_module.HEALTHCHECK_REPORT_ERRORS = True
@@ -216,7 +221,8 @@ class TestHealthCheck(unittest.TestCase):
             "http://healthcheck", data={"error": "Test Error ()"}
         )
 
-    @patch("mqtt_to_eventhub_module.requests.get")
+    @pytest.mark.asyncio
+    @patch("mqtt_to_eventhub_module.requests.get", new_callable=AsyncMock)
     def test_poll_healthcheck(self, mock_get):
         mqtt_to_eventhub_module.HEALTHCHECK_URL = "http://healthcheck"
         mqtt_to_eventhub_module.HEALTHCHECK_METHOD = "GET"
@@ -225,7 +231,7 @@ class TestHealthCheck(unittest.TestCase):
 
 
 class TestCheckMqttTimeout(unittest.IsolatedAsyncioTestCase):
-
+    @pytest.mark.asyncio
     @patch("mqtt_to_eventhub_module.log_error")
     @patch("mqtt_to_eventhub_module.MQTT_TIMEOUT", new=1)  # Override the MQTT_TIMEOUT to 1 second for testing
     async def test_check_mqtt_timeout(self, mock_log_error):
@@ -243,6 +249,7 @@ class TestCheckMqttTimeout(unittest.IsolatedAsyncioTestCase):
             1,  # MQTT_TIMEOUT
             mqtt_to_eventhub_module.last_mqtt_message_time
         )
+
 
 if __name__ == "__main__":
     unittest.main()

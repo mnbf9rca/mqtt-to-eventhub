@@ -599,13 +599,13 @@ cli = ["click (>=5.0)"]
 
 [[package]]
 name = "python-dotenv-vault"
-version = "0.4.1"
+version = "0.6.3"
 description = "Decrypt .env.vault file."
 optional = false
 python-versions = "*"
 files = [
-    {file = "python-dotenv-vault-0.4.1.tar.gz", hash = "sha256:61c55029a03caae2a8e9ced4e775ed7fc92314395264a9ffc5592c1d3dafcbf4"},
-    {file = "python_dotenv_vault-0.4.1-py3-none-any.whl", hash = "sha256:d190ec4419ff3f99d8dc15d27f886a32f30953d7c66eb1ae3ff439e7dc277d25"},
+    {file = "python-dotenv-vault-0.6.3.tar.gz", hash = "sha256:b2a1e5ab07323ee9f009e55afff1dcc977b999fa979808620a51e5079a3244fc"},
+    {file = "python_dotenv_vault-0.6.3-py3-none-any.whl", hash = "sha256:7f0f8c5933f385fc3b4409fcbffbe2e8e2cdfdfc138e3831e98786b6fdb99da6"},
 ]
 
 [package.dependencies]
@@ -781,4 +781,4 @@ testing = ["coverage (>=6.2)", "coverage-enable-subprocess (>=1)", "flaky (>=3.7
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.9"
-content-hash = "9a12f48e4c4304c9733eb59bf57c7e9ce8e7362c575844941dd24427d735680e"
+content-hash = "82e14c8fb944dae570d34125f26cc5ab3488da2cc3a4b83ddadb1071d81d767d"

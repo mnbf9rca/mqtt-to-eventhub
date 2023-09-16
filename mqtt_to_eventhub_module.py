@@ -10,7 +10,7 @@ licence: MIT
 """
 import asyncio
 from datetime import datetime
-import importlib
+#import importlib
 import json
 import logging
 import os
@@ -25,15 +25,15 @@ from azure.eventhub import EventHubProducerClient
 from azure.eventhub import EventDataBatch
 from azure.eventhub.aio import EventHubProducerClient as EventHubProducerClientAsync
 from azure.eventhub.exceptions import EventHubError
+from dotenv_vault import load_dotenv
 
 
 # load dotenv only if it's available, otherwise assume environment variables are set
-dotenv_spec = importlib.util.find_spec("dotenv_vault")
-if dotenv_spec is not None:
-    print(f"loading dotenv from {os.getcwd()}")
-    from dotenv_vault import load_dotenv
-    load_dotenv(verbose=True)
-    print("dotenv loaded")
+#dotenv_spec = importlib.util.find_spec("dotenv_vault")
+#if dotenv_spec is not None:
+print(f"loading dotenv from {os.getcwd()}")
+load_dotenv(verbose=True)
+print("dotenv loaded")
 
 # MQTT configuration
 MQTT_LOGIN = os.environ.get("MQTT_LOGIN", None)
@@ -45,6 +45,10 @@ MQTT_BASE_TOPIC = os.environ.get("MQTT_BASE_TOPIC", "#")
 # Azure Eventhub configuration
 EVENTHUB_CONN_STR = os.environ["EVENTHUB_CONN_STR"]
 EVENTHUB_NAME = os.environ["EVENTHUB_NAME"]
+
+# check we have some envvars
+assert EVENTHUB_NAME
+
 MAX_EVENT_BATCH_SIZE_BYTES = int(os.environ.get("MAX_EVENT_BATCH_SIZE", 5120))
 
 # optional configuraiton - if not set, will not poll
@@ -54,7 +58,7 @@ HEALTHCHECK_INTERVAL = int(os.environ.get("HEALTHCHECK_INTERVAL", 60))
 HEALTHCHECK_METHOD = os.environ.get("HEALTHCHECK_METHOD", "GET")
 # if set to true, use HTTP POST to send error data to healthcheck
 HEALTHCHECK_REPORT_ERRORS = (
-    os.environ.get("HEALTHCHECK_REPORT_ERRORS", "True") == "True"
+    os.environ.get("HEALTHCHECK_REPORT_ERRORS", "true").lower() == "true"
 )
 # maximum time between between MQTT messages before we consider the source dead and signal an error
 MQTT_TIMEOUT = int(os.environ.get("MQTT_TIMEOUT", 120))  # seconds
@@ -66,7 +70,7 @@ LOG_LEVEL = os.environ.get("LOG_LEVEL", "WARNING")
 
 # Create a new logger
 logger = logging.getLogger(__name__)
-
+logger.info("created logger")
 # Set the log level based on the environment variable value
 if LOG_LEVEL in logging._nameToLevel:
     logger.setLevel(LOG_LEVEL)
@@ -344,24 +348,24 @@ def main():
     """
 
     # set up logging - reduce the log level to WARNING to reduce excessive logging i.e. SD wear
-    # logger.setLevel(logging.WARNING) -> we do this above
     logging.getLogger("uamqp").setLevel(logging.WARNING)  # Low level uAMQP are logged only for critical
     logging.getLogger("azure").setLevel(logging.WARNING)  # All azure clients are logged only for critical
 
     try:
-        run_loop = asyncio.get_event_loop()
+        run_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(run_loop)
         run_loop.run_until_complete(
             asyncLoop(eventhub_producer_async, client)
-        )  # , event_batch))
+        )
     except KeyboardInterrupt:
         pass
     except Exception as e:
         log_error(e)
     finally:
-        logger.debug("closing run_loop")
+        logging.debug("closing run_loop")
         run_loop.close()
-        logger.debug("run_loop closed")
-        logger.debug("closing eventhub_producer_async")
+        logging.debug("run_loop closed")
+        logging.debug("closing eventhub_producer_async")
         asyncio.run(eventhub_producer_async.close())
-        logger.debug("eventhub_producer_async closed")
-        logger.info("shutdown complete")
+        logging.debug("eventhub_producer_async closed")
+        logging.info("shutdown complete")

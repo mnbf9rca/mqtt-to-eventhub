@@ -33,6 +33,8 @@ jobs:
           # ignore long lines
           ruff --format=github --target-version=$TARGET_VERSION --ignore=E501 .
       - name: Test with pytest
+        env:
+          DOTENV_KEY: ${{ secrets.DOTENV_KEY }}
         run: |
           source .venv/bin/activate
           pytest

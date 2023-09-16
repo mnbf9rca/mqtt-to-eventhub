@@ -33,9 +33,9 @@ from dotenv_vault import load_dotenv
 #if dotenv_spec is not None:
 # print whether dotenv_key is populated
 if os.environ.get("DOTENV_KEY", None):
-    print("dotenv_key is populated")
+    print("DOTENV_KEY is populated")
 else:
-    print("dotenv_key is not populated")
+    print("DOTENV_KEY is not populated")
 
 print(f"loading dotenv from {os.getcwd()}")
 load_dotenv(verbose=True)

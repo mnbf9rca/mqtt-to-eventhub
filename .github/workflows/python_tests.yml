@@ -22,13 +22,9 @@ jobs:
         ports:
           # Port mapping
           - 1883:1883
-          - 8883:8883
         # Docker Hub image
         image: eclipse-mosquitto:latest
-        # Provide the password for postgres
-        env:
-          MQTT_USER: mqtt
-          MQTT_PASSWORD: mqtt
+        options: "-c /mosquitto-no-auth.conf"
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python ${{ matrix.python-version }}
@@ -57,7 +53,7 @@ jobs:
           # stop the build if there are Python syntax errors or undefined names
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
           # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics          
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 #      - name: Lint with ruff
 #        run: |
 #          TARGET_VERSION=py$(echo ${{ matrix.python-version }} | tr -d '.')

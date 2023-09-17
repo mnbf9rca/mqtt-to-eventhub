@@ -22,7 +22,7 @@ jobs:
         ports:
           # Port mapping
           - 1883:1883
-            8883:8883
+          - 8883:8883
         # Docker Hub image
         image: eclipse-mosquitto:latest
         # Provide the password for postgres

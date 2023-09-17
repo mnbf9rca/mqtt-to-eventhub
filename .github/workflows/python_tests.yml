@@ -47,7 +47,7 @@ jobs:
       - name: Install dependencies
         run: |
           poetry install --with test --without dev  --no-interaction --no-root --sync
-          which flake8
+          python  -c "import os; print(os.environ['VIRTUAL_ENV'])"
 #          pip install ruff
       - name: Lint with flake8
         run: |

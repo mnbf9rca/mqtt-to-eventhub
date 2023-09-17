@@ -46,6 +46,7 @@ jobs:
           virtualenvs-in-project: true
       - name: Install dependencies
         run: |
+          source $VENV
           poetry install --with test --without dev  --no-interaction --no-root --sync
           python  -c "import os; print(os.environ['VIRTUAL_ENV'])"
 #          pip install ruff

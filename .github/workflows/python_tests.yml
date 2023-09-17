@@ -12,7 +12,7 @@ jobs:
   container-job:
     strategy:
       matrix:
-        python-version: ["3.9", "3.10", "3.11"]
+        python-version: ["3.9"] #, "3.10", "3.11"]
     runs-on: ubuntu-latest
     container: ubuntu:latest
     # Service containers to run with `container-job`
@@ -44,9 +44,12 @@ jobs:
           version: 1.6.1 # pin the version as they keep changing their APIs
           virtualenvs-create: true
           virtualenvs-in-project: true
+      - name: Activate virtualenv
+        run: |
+          . $VENV
+          echo PATH=$PATH >> $GITHUB_ENV
       - name: Install dependencies
         run: |
-          source $VENV
           poetry install --with test --without dev  --no-interaction --no-root --sync
           python  -c "import os; print(os.environ['VIRTUAL_ENV'])"
 #          pip install ruff

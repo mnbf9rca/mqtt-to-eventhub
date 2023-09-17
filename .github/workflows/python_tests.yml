@@ -9,12 +9,26 @@ on:
       - master
 
 jobs:
-  build:
-
-    runs-on: ubuntu-latest
+  container-job:
     strategy:
       matrix:
         python-version: ["3.9", "3.10", "3.11"]
+    runs-on: ubuntu-latest
+    container: ubuntu:latest
+    # Service containers to run with `container-job`
+    services:
+      # Label used to access the service container
+      mqtt:
+        ports:
+          # Port mapping
+          - 1883:1883
+            8883:8883
+        # Docker Hub image
+        image: eclipse-mosquitto:latest
+        # Provide the password for postgres
+        env:
+          MQTT_USER: mqtt
+          MQTT_PASSWORD: mqtt
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python ${{ matrix.python-version }}

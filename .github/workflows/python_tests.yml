@@ -42,17 +42,18 @@ jobs:
       - uses: snok/install-poetry@v1
         with:
           version: 1.6.1 # pin the version as they keep changing their APIs
-          virtualenvs-create: true
-          virtualenvs-in-project: true
+          virtualenvs-create: false
+          virtualenvs-in-project: false
       - name: Install dependencies
         run: |
-          . {cache-dir}/virtualenvs/$VENV
+          python -m venv venv
+          . venv/bin/activate
           poetry install --with test --without dev  --no-interaction --no-root --sync
           python  -c "import os; print(os.environ['VIRTUAL_ENV'])"
 #          pip install ruff
       - name: Lint with flake8
         run: |
-          . $VENV
+          . venv/bin/activate
           # stop the build if there are Python syntax errors or undefined names
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
           # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
@@ -69,7 +70,7 @@ jobs:
         env:
           DOTENV_KEY: ${{ secrets.DOTENV_KEY }}
         run: |
-          . $VENV
+          . venv/bin/activate
           pytest --cov mqtt_to_eventhub_module --cov-report=xml
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v3

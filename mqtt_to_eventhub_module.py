@@ -327,26 +327,6 @@ def on_error(events, pid, error):
     log_error(events, pid, error)
 
 
-# create an event hub producer client and mqtt client
-eventhub_producer_async: EventHubProducerClient = (
-    EventHubProducerClientAsync.from_connection_string(
-        conn_str=EVENTHUB_CONN_STR,
-        eventhub_name=EVENTHUB_NAME,
-        buffered_mode=False,
-        on_success=on_success_async,
-        on_error=on_error,
-    )
-)
-logger.debug("created eventhub_producer_async")
-
-client = aiomqtt.Client(
-    hostname=MQTT_HOST,
-    port=MQTT_PORT,
-    username=MQTT_LOGIN,
-    password=MQTT_PASSWORD,
-)
-logger.debug("created client")
-
 
 def main():
     """
@@ -360,6 +340,12 @@ def main():
     try:
         run_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(run_loop)
+        client = get_client()
+
+        # create an event hub producer client and mqtt client
+        eventhub_producer_async = get_producer()
+
+        logger.debug("created client")
         run_loop.run_until_complete(
             asyncLoop(eventhub_producer_async, client)
         )
@@ -375,3 +361,28 @@ def main():
         asyncio.run(eventhub_producer_async.close())
         logging.debug("eventhub_producer_async closed")
         logging.info("shutdown complete")
+
+
+def get_producer():
+    eventhub_producer_async: EventHubProducerClient = (
+            EventHubProducerClientAsync.from_connection_string(
+                conn_str=EVENTHUB_CONN_STR,
+                eventhub_name=EVENTHUB_NAME,
+                buffered_mode=False,
+                on_success=on_success_async,
+                on_error=on_error,
+            )
+        )
+    logger.debug("created eventhub_producer_async")
+    return eventhub_producer_async
+
+
+def get_client():
+    client = aiomqtt.Client(
+        hostname=MQTT_HOST,
+        port=MQTT_PORT,
+        username=MQTT_LOGIN,
+        password=MQTT_PASSWORD,
+        )
+    
+    return client

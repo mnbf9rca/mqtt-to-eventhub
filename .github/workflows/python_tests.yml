@@ -9,7 +9,7 @@ on:
       - master
 
 jobs:
-  test:
+  build:
     strategy:
       matrix:
         python-version: ["3.9"] #, "3.10", "3.11"]
@@ -35,7 +35,6 @@ jobs:
           . venv/bin/activate
           poetry install --with test --without dev  --no-interaction --no-root --sync
           python  -c "import os; print(os.environ['VIRTUAL_ENV'])"
-#          pip install ruff
       - name: Lint with flake8
         run: |
           . venv/bin/activate
@@ -43,14 +42,6 @@ jobs:
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
           # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
           flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-#      - name: Lint with ruff
-#        run: |
-#          TARGET_VERSION=py$(echo ${{ matrix.python-version }} | tr -d '.')
-#          # stop the build if there are Python syntax errors or undefined names
-#          ruff --format=github --select=E9,F63,F7,F82 --target-version=$TARGET_VERSION .
-#          # default set of ruff rules with GitHub Annotations
-#          # ignore long lines
-#          ruff --format=github --target-version=$TARGET_VERSION --ignore=E501 .
       - name: Test with pytest
         env:
           DOTENV_KEY: ${{ secrets.DOTENV_KEY }}

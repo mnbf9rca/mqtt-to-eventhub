@@ -35,10 +35,10 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install curl
+      - name: Install OS dependencies
         run: |
           DEBIAN_FRONTEND=noninteractive apt update
-          DEBIAN_FRONTEND=noninteractive apt install curl -y
+          DEBIAN_FRONTEND=noninteractive apt install curl sqlite3 -y
       - uses: snok/install-poetry@v1
         with:
           version: 1.6.1 # pin the version as they keep changing their APIs

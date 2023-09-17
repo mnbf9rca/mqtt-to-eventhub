@@ -2,6 +2,7 @@ import asyncio
 import json
 import time
 import pytest
+import aiomqtt
 from unittest.mock import Mock, AsyncMock, MagicMock, patch
 
 import paho.mqtt.client as mqtt_client
@@ -139,6 +140,85 @@ class TestAsyncLoop:
         assert len(actual_coroutines) == 3
 
 
+class TestExtractDataFromMessage:
+    def test_all_attributes_present(self):
+        message = aiomqtt.Message(
+            topic="test_topic",
+            payload=b"test_payload",
+            qos=0,
+            retain=False,
+            mid=0,
+            properties={},
+        )
+
+        result = mqtt_to_eventhub_module.extract_data_from_message(message)
+        assert result["topic"] == "test_topic"
+        assert result["payload"] == "test_payload"
+        assert result["qos"] == 0
+        assert result["retain"] is False
+        assert "timestamp" in result
+
+    def test_message_is_none(self):
+        with pytest.raises(ValueError, match="Received null message"):
+            mqtt_to_eventhub_module.extract_data_from_message(None)
+
+    def test_topic_is_none(self):
+        message = aiomqtt.Message(
+            topic="test_topic",
+            payload=b"test_payload",
+            qos=0,
+            retain=False,
+            mid=0,
+            properties={},
+        )
+        message.topic = None
+
+        with pytest.raises(ValueError, match="Message topic is missing"):
+            mqtt_to_eventhub_module.extract_data_from_message(message)
+
+    def test_payload_is_none(self):
+        message = aiomqtt.Message(
+            topic="test_topic",
+            payload=b"test_payload",
+            qos=0,
+            retain=False,
+            mid=0,
+            properties={},
+        )
+        message.payload = None
+
+        with pytest.raises(ValueError, match="Message payload is missing"):
+            mqtt_to_eventhub_module.extract_data_from_message(message)
+
+    def test_qos_is_none(self):
+        message = aiomqtt.Message(
+            topic="test_topic",
+            payload=b"test_payload",
+            qos=0,
+            retain=False,
+            mid=0,
+            properties={},
+        )
+        message.qos = None
+
+        with pytest.raises(ValueError, match="Message QoS is missing"):
+            mqtt_to_eventhub_module.extract_data_from_message(message)
+
+    def test_retain_is_none(self):
+        message = aiomqtt.Message(
+            topic="test_topic",
+            payload=b"test_payload",
+            qos=0,
+            retain=False,
+            mid=0,
+            properties={},
+        )
+        message.retain = None
+
+        with pytest.raises(ValueError, match="Message retain flag is missing"):
+            mqtt_to_eventhub_module.extract_data_from_message(message)
+
+
 class TestProcessMessage:
     @pytest.mark.asyncio
     @freeze_time("2023-09-16 15:56:00")
@@ -179,6 +259,69 @@ class TestProcessMessage:
         ]  # Assuming add is called with one positional argument
         actual_event_data_json = actual_event_data.body_as_json("utf-8")
         assert expected_event_data_json == actual_event_data_json
+
+    @pytest.mark.asyncio
+    @freeze_time("2023-09-16 15:56:00")
+    @patch("mqtt_to_eventhub_module.extract_data_from_message")
+    @patch("mqtt_to_eventhub_module.logger")
+    @patch("mqtt_to_eventhub_module.eventhub_producer_async", new_callable=AsyncMock)
+    @patch("mqtt_to_eventhub_module.send_message_to_eventhub_async")
+    @patch("mqtt_to_eventhub_module.aiomqtt.Client")
+    async def test_on_message_async_with_empty_message(
+        self,
+        mock_client,
+        mock_send_message,
+        mock_producer,
+        mock_logger,
+        mock_extractor,
+    ):
+        mock_event_data_batch = mock_client.create_batch(
+            max_size_in_bytes=mqtt_to_eventhub_module.MAX_EVENT_BATCH_SIZE_BYTES
+        )
+        dummy_message = None
+
+        mock_extractor.return_value = None
+
+        await mqtt_to_eventhub_module.on_message_async(
+            mock_client, mock_event_data_batch, dummy_message
+        )
+
+        assert mock_send_message.call_count == 0
+        assert mock_logger.error.call_count == 1
+        assert mock_logger.error.call_args[0][0] == "json_data is empty"
+        assert mock_producer.create_batch.call_count == 0
+
+    @pytest.mark.asyncio
+    @freeze_time("2023-09-16 15:56:00")
+    @patch("mqtt_to_eventhub_module.logger")
+    @patch("mqtt_to_eventhub_module.eventhub_producer_async", new_callable=AsyncMock)
+    @patch("mqtt_to_eventhub_module.send_message_to_eventhub_async")
+    @patch("mqtt_to_eventhub_module.aiomqtt.Client")
+    @patch("mqtt_to_eventhub_module.aiomqtt.Message")
+    async def test_on_message_async_with_malformed_message(
+        self, mock_message, mock_client, mock_send_message, mock_producer, mock_logger
+    ):
+        mock_event_data_batch = mock_client.create_batch(
+            max_size_in_bytes=mqtt_to_eventhub_module.MAX_EVENT_BATCH_SIZE_BYTES
+        )
+        mock_message.payload = b"message_payload"
+        mock_message.topic.value = "topic_name"
+        mock_message.qos = 0
+        mock_message.retain = None
+
+        await mqtt_to_eventhub_module.on_message_async(
+            mock_client, mock_event_data_batch, mock_message
+        )
+
+        assert mock_send_message.call_count == 0
+        assert (
+            mock_logger.error.call_count == 2
+        )  # 1 inside extract_data_from_message and 1 here
+        assert (
+            mock_logger.error.call_args[0][0]
+            == "Error extracting message (ValueError('Message retain flag is missing'),)"
+        )
+        assert mock_producer.create_batch.call_count == 0
 
     @pytest.mark.asyncio
     @freeze_time("2023-09-16 15:56:00")

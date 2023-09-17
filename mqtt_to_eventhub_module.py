@@ -9,25 +9,22 @@ inspired by:
 licence: MIT
 """
 import asyncio
-from datetime import datetime
-
 # import importlib
 import json
 import logging
 import os
 import time
+from datetime import datetime
+from typing import Optional
 
 import aiomqtt
 import paho.mqtt.client as mqtt_client
 import requests
-
-from azure.eventhub import EventData
-from azure.eventhub import EventHubProducerClient
-from azure.eventhub import EventDataBatch
-from azure.eventhub.aio import EventHubProducerClient as EventHubProducerClientAsync
+from azure.eventhub import EventData, EventDataBatch, EventHubProducerClient
+from azure.eventhub.aio import \
+    EventHubProducerClient as EventHubProducerClientAsync
 from azure.eventhub.exceptions import EventHubError
 from dotenv_vault import load_dotenv
-
 
 # load dotenv only if it's available, otherwise assume environment variables are set
 # dotenv_spec = importlib.util.find_spec("dotenv_vault")
@@ -130,7 +127,7 @@ async def on_message_async(
         message_data = extract_data_from_message(message)
         json_data = json.dumps(message_data)
         logger.debug("data extracted: %s", json_data)
-        if not json_data:
+        if not json_data or json_data == "null":
             logger.error("json_data is empty")
             return existing_event_batch
     except Exception as e:
@@ -183,28 +180,52 @@ async def send_message_to_eventhub_async(
         log_error("Error sending message to event hub", e)
 
 
-def extract_data_from_message(message: aiomqtt.Message) -> dict:
+
+def extract_data_from_message(message: aiomqtt.Message) -> Optional[dict]:
     """
-    creates a json object with the data and metadata
+    Creates a json object with the data and metadata.
+    Raises exceptions for missing or invalid fields.
     @param message: the message received from the MQTT broker
-    @return: the json object
+    @return: the json object or None if extraction failed
     """
 
-    logger.info("Received message: %s", message.payload)
-    logger.info("Topic: %s", message.topic)
-    logger.info("QoS: %s", message.qos)
-    logger.info("Retain flag: %s", message.retain)
+    if message is None:
+        logger.error("Received null message")
+        raise ValueError("Received null message")
 
-    # create a json object with the data and metadata
+    if message.topic is None or message.topic.value is None:
+        logger.error("Message topic is missing")
+        raise ValueError("Message topic is missing")
+
+    if message.payload is None:
+        logger.error("Message payload is missing")
+        raise ValueError("Message payload is missing")
+
+    try:
+        decoded_payload = message.payload.decode()
+    except Exception as e:
+        logger.error("Failed to decode payload: %s", e)
+        raise
+
+    if message.qos is None:
+        logger.error("Message QoS is missing")
+        raise ValueError("Message QoS is missing")
+
+    if message.retain is None:
+        logger.error("Message retain flag is missing")
+        raise ValueError("Message retain flag is missing")
+
     data = {
         "topic": message.topic.value,
-        "payload": message.payload.decode(),
+        "payload": decoded_payload,
         "qos": message.qos,
         "retain": message.retain,
-        "timestamp": time.time(),  # mqtt messages don't have a timestamp, so we add one
+        "timestamp": time.time(),
     }
-    logger.debug("extracted: %s", data)
+
+    logger.debug("Extracted data: %s", data)
     return data
+
 
 
 async def asyncLoop(eventhub_producer: EventHubProducerClient, client: aiomqtt.Client):

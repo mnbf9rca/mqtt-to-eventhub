@@ -46,7 +46,7 @@ jobs:
           virtualenvs-in-project: true
       - name: Activate virtualenv
         run: |
-          . $VENV
+          source $VENV
           echo PATH=$PATH >> $GITHUB_ENV
       - name: Install dependencies
         run: |

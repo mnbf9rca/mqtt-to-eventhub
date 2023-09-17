@@ -16,7 +16,7 @@ import logging
 import os
 import time
 
-import asyncio_mqtt as aiomqtt
+import aiomqtt
 import paho.mqtt.client as mqtt_client
 import requests
 

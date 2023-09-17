@@ -10,7 +10,8 @@ licence: MIT
 """
 import asyncio
 from datetime import datetime
-#import importlib
+
+# import importlib
 import json
 import logging
 import os
@@ -29,8 +30,8 @@ from dotenv_vault import load_dotenv
 
 
 # load dotenv only if it's available, otherwise assume environment variables are set
-#dotenv_spec = importlib.util.find_spec("dotenv_vault")
-#if dotenv_spec is not None:
+# dotenv_spec = importlib.util.find_spec("dotenv_vault")
+# if dotenv_spec is not None:
 # print whether dotenv_key is populated
 if os.environ.get("DOTENV_KEY", None):
     print("DOTENV_KEY is populated")
@@ -95,7 +96,7 @@ def on_connect(client: aiomqtt.Client, _userdata, _flags, result_code: int):
     subscribe(client)
 
 
-def subscribe(client:  aiomqtt.Client):
+def subscribe(client: aiomqtt.Client):
     result_code, _message_id = client.subscribe(MQTT_BASE_TOPIC)
 
     if result_code != mqtt_client.MQTT_ERR_SUCCESS:
@@ -108,7 +109,6 @@ async def on_message_async(
     _client: aiomqtt.Client,
     existing_event_batch: EventDataBatch,
     message: aiomqtt.Message,
-
 ) -> EventDataBatch:
     """
     This is the callback function that is called when a message is received
@@ -146,7 +146,9 @@ async def on_message_async(
         # batch is full, send it and start a new one
         logger.debug("batch full, adding new batch")
         logger.debug("calling send_message_to_eventhub_async")
-        await send_message_to_eventhub_async(eventhub_producer_async, existing_event_batch)
+        await send_message_to_eventhub_async(
+            eventhub_producer_async, existing_event_batch
+        )
         logger.debug("creating new batch")
         new_event_batch: EventDataBatch = await eventhub_producer_async.create_batch(
             max_size_in_bytes=MAX_EVENT_BATCH_SIZE_BYTES
@@ -155,7 +157,9 @@ async def on_message_async(
         new_event_batch.add(EventData(json_data))
         logger.debug("item added to new batch")
         return new_event_batch
-    logger.info("total size of messages in queue %i", existing_event_batch.size_in_bytes)
+    logger.info(
+        "total size of messages in queue %i", existing_event_batch.size_in_bytes
+    )
     return existing_event_batch
 
 
@@ -240,7 +244,9 @@ async def message_loop(
         async with client.messages() as messages:
             logger.debug("iterating through messages")
             await client.subscribe(MQTT_BASE_TOPIC)
-            logger.debug("subscribed to base topic (%s)", MQTT_BASE_TOPIC)  # again (for some reason)?
+            logger.debug(
+                "subscribed to base topic (%s)", MQTT_BASE_TOPIC
+            )  # again (for some reason)?
             async for message in messages:
                 logger.debug("processing event batch")
                 event_batch = await on_message_async(client, event_batch, message)
@@ -307,9 +313,11 @@ async def check_mqtt_timeout():
     """
     while True:
         if time.time() - last_mqtt_message_time > MQTT_TIMEOUT:
-            log_error("No message received via MQTT for more than %s seconds - last message received at %s",
-                      MQTT_TIMEOUT,
-                      last_mqtt_message_time)
+            log_error(
+                "No message received via MQTT for more than %s seconds - last message received at %s",
+                MQTT_TIMEOUT,
+                last_mqtt_message_time,
+            )
         await asyncio.sleep(MQTT_TIMEOUT)
 
 
@@ -329,15 +337,18 @@ def on_error(events, pid, error):
     log_error(events, pid, error)
 
 
-
 def main():
     """
     main function
     """
 
     # set up logging - reduce the log level to WARNING to reduce excessive logging i.e. SD wear
-    logging.getLogger("uamqp").setLevel(logging.WARNING)  # Low level uAMQP are logged only for critical
-    logging.getLogger("azure").setLevel(logging.WARNING)  # All azure clients are logged only for critical
+    logging.getLogger("uamqp").setLevel(
+        logging.WARNING
+    )  # Low level uAMQP are logged only for critical
+    logging.getLogger("azure").setLevel(
+        logging.WARNING
+    )  # All azure clients are logged only for critical
 
     try:
         run_loop = asyncio.new_event_loop()
@@ -349,9 +360,7 @@ def main():
         eventhub_producer_async = get_producer()
 
         logger.debug("created client")
-        run_loop.run_until_complete(
-            asyncLoop(eventhub_producer_async, client)
-        )
+        run_loop.run_until_complete(asyncLoop(eventhub_producer_async, client))
     except KeyboardInterrupt:
         pass
     except Exception as e:
@@ -368,23 +377,21 @@ def main():
 
 def get_producer():
     eventhub_producer_async = EventHubProducerClientAsync.from_connection_string(
-                conn_str=EVENTHUB_CONN_STR,
-                eventhub_name=EVENTHUB_NAME,
-                buffered_mode=False,
-                on_success=on_success_async,
-                on_error=on_error,
-            )
+        conn_str=EVENTHUB_CONN_STR,
+        eventhub_name=EVENTHUB_NAME,
+        buffered_mode=False,
+        on_success=on_success_async,
+        on_error=on_error,
+    )
 
     logger.debug("created eventhub_producer_async")
     return eventhub_producer_async
 
 
 def get_client():
-    client = aiomqtt.Client(
+    return aiomqtt.Client(
         hostname=MQTT_HOST,
         port=MQTT_PORT,
         username=MQTT_LOGIN,
         password=MQTT_PASSWORD,
-        )
-    
-    return client
+    )

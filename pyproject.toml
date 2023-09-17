@@ -15,7 +15,6 @@ requests = "^2.31.0"
 aiomqtt = "^1.2.0"
 
 [tool.poetry.group.dev.dependencies]
-flake8 = "^6.1.0"
 black = "^23.9.1"
 pre-commit = "^3.4.0"
 types-paho-mqtt = "^1.6.0.7"
@@ -26,6 +25,7 @@ pytest = "^7.4.2"
 pytest-asyncio = "^0.21.1"
 freezegun = "^1.2.2"
 pytest-cov = "^4.1.0"
+flake8 = "^6.1.0"
 
 [build-system]
 requires = ["poetry-core"]

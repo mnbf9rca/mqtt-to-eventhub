@@ -9,23 +9,11 @@ on:
       - master
 
 jobs:
-  container-job:
+  test:
     strategy:
       matrix:
         python-version: ["3.9"] #, "3.10", "3.11"]
     runs-on: ubuntu-latest
-    container: ubuntu:latest
-    # Service containers to run with `container-job`
-    services:
-      # Label used to access the service container
-      mqtt:
-        ports:
-          # Port mapping
-          - 1883:1883
-        # Docker Hub image
-        image: eclipse-mosquitto:latest
-        # from https://github.com/eclipse/mosquitto/blob/master/docker/2.0/Dockerfile
-        options: '--entrypoint ["/usr/sbin/mosquitto "-c" "/mosquitto-no-auth.conf"]'
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python ${{ matrix.python-version }}

@@ -380,11 +380,9 @@ def get_producer():
 
 
 def get_client():
-    client = aiomqtt.Client(
+    return aiomqtt.Client(
         hostname=MQTT_HOST,
         port=MQTT_PORT,
         username=MQTT_LOGIN,
         password=MQTT_PASSWORD,
-        )
-    
-    return client
+    )

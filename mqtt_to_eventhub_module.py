@@ -74,6 +74,8 @@ last_mqtt_message_time: datetime = time.time()
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "WARNING")
 
+eventhub_producer_async: EventHubProducerClient = None
+
 # Create a new logger
 logger = logging.getLogger(__name__)
 logger.info("created logger")
@@ -343,6 +345,7 @@ def main():
         client = get_client()
 
         # create an event hub producer client and mqtt client
+        global eventhub_producer_async
         eventhub_producer_async = get_producer()
 
         logger.debug("created client")
@@ -364,15 +367,14 @@ def main():
 
 
 def get_producer():
-    eventhub_producer_async: EventHubProducerClient = (
-            EventHubProducerClientAsync.from_connection_string(
+    eventhub_producer_async = EventHubProducerClientAsync.from_connection_string(
                 conn_str=EVENTHUB_CONN_STR,
                 eventhub_name=EVENTHUB_NAME,
                 buffered_mode=False,
                 on_success=on_success_async,
                 on_error=on_error,
             )
-        )
+
     logger.debug("created eventhub_producer_async")
     return eventhub_producer_async
 

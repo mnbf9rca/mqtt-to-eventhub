@@ -5,7 +5,8 @@ import pytest
 from unittest.mock import Mock, AsyncMock, MagicMock, patch
 
 import paho.mqtt.client as mqtt_client
-from azure.eventhub import EventData
+from azure.eventhub import EventData, EventDataBatch
+
 from azure.eventhub.exceptions import EventHubError
 from freezegun import freeze_time
 
@@ -56,6 +57,53 @@ class TestBasicConnectivity:
 
         # Assert
         mock_logger.error.assert_called()
+
+
+class TestActualConnections:
+    @pytest.mark.asyncio
+    async def test_real_mqtt_connection(self):
+        # Call the function you are testing
+        client = mqtt_to_eventhub_module.get_client()
+
+        # Async function to handle connection
+        async def on_connect_async(client, _userdata, _flags, rc):
+            assert rc == 0  # 0 means successful connection
+
+        client.on_connect = on_connect_async
+
+        await client.connect()  # .connect_async(MQTT_HOST, MQTT_PORT)
+        await asyncio.sleep(1)  # give it a second to connect
+
+        # Disconnect
+        await client.disconnect()
+
+    @pytest.mark.asyncio
+    @patch("mqtt_to_eventhub_module.on_success_async", new_callable=AsyncMock)
+    @patch("mqtt_to_eventhub_module.on_error")
+    async def test_real_eventhub_connection(self, mock_on_error, mock_on_success):
+        # Call the function you are testing
+        producer = mqtt_to_eventhub_module.get_producer()
+
+        try:
+            # Create an event batch
+            event_batch: EventDataBatch = await producer.create_batch()
+
+            # Add an event to the batch
+            test_event = EventData("Sample Event Data")
+            event_batch.add(test_event)
+
+            # Send the batch of events to the event hub
+            await producer.send_batch(event_batch)
+            assert mock_on_error.call_count == 0
+            assert mock_on_success.call_count == 1
+            assert mock_on_success.call_args[0][0] == [test_event]
+
+        except Exception as e:
+            pytest.fail(f"Failed to send event batch: {e}")
+
+        finally:
+            # Close the producer
+            await producer.close()
 
 
 class TestAsyncLoop:

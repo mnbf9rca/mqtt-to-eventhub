@@ -24,7 +24,7 @@ jobs:
           - 1883:1883
         # Docker Hub image
         image: eclipse-mosquitto:latest
-        options: "-c /mosquitto-no-auth.conf"
+        options: "--entrypoint /docker-entrypoint.sh mosquitto -c /mosquitto-no-auth.conf"
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python ${{ matrix.python-version }}

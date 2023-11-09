@@ -205,14 +205,14 @@ def extract_data_from_message(message: aiomqtt.Message) -> Optional[dict]:
         raise
 
     if message.qos is None:
-        error_message = "Message QoS is missing: " + serialize_message(message)
-        logger.error(error_message)
-        raise ValueError(error_message)
+        error_message = "Message qos is missing: " + serialize_message(message)
+        log_error(error_message)
+        # raise ValueError(error_message)
 
     if message.retain is None:
-        error_message = "Message retain flag is missing: " + serialize_message(message)
-        logger.error(error_message)
-        raise ValueError(error_message)
+        error_message = "Message retain is missing: " + serialize_message(message)
+        log_error(error_message)
+        # raise ValueError(error_message)
 
     data = {
         "topic": message.topic.value,
@@ -222,7 +222,7 @@ def extract_data_from_message(message: aiomqtt.Message) -> Optional[dict]:
         "timestamp": time.time(),
     }
 
-    logger.debug("Extracted data: %s", data)
+    logger.debug(f"Extracted data: {data}", )
     return data
 
 

@@ -160,21 +160,31 @@ class TestExtractDataFromMessage:
     @pytest.mark.parametrize("attribute, error_message", [
         ("topic", "Message topic or topic.value is missing"),
         ("payload", "Message payload is missing"),
-        ("qos", "Message QoS is missing"),
-        ("retain", "Message retain flag is missing"),
     ])
-    def test_attribute_is_none(self, default_message: aiomqtt.Message, attribute: str, error_message: str):
+    @patch("mqtt_to_eventhub_module.log_error")
+    def test_attribute_is_none(self, mock_log_error: str, default_message: aiomqtt.Message, attribute: str, error_message: str):
         setattr(default_message, attribute, None)
         with pytest.raises(ValueError, match=error_message):
             mqtt_to_eventhub_module.extract_data_from_message(default_message)
+        mock_log_error.assert_not_called()
 
-    def test_all_attributes_present(self, default_message: aiomqtt.Message):
+    @freeze_time("2023-09-16 15:56:00")
+    @pytest.mark.parametrize("attribute", [None, "qos", "retain"])
+    @patch("mqtt_to_eventhub_module.log_error")
+    def test_parse_valid_messages_all_attributes_or_some_missing(self, mock_log_error, attribute, default_message):
+        if attribute:
+            setattr(default_message, attribute, None)
         result = mqtt_to_eventhub_module.extract_data_from_message(default_message)
         assert result["topic"] == default_message.topic.value
         assert result["payload"] == default_message.payload.decode("utf-8")
         assert result["qos"] == default_message.qos
         assert result["retain"] is default_message.retain
-        assert "timestamp" in result
+        assert result["timestamp"] == 1694879760.0
+        if attribute is None:
+            mock_log_error.assert_not_called()
+        else:
+            found = any(f"Message {attribute} is missing" in str(call) for call in mock_log_error.call_args_list)
+            assert found, f"Expected message containing 'Message {attribute} is missing' not found in log_error calls"
 
     def test_message_is_none(self):
         with pytest.raises(ValueError, match="Received null message"):
@@ -282,10 +292,10 @@ class TestProcessMessage:
 
         assert mock_send_message.call_count == 0
         assert (
-            mock_logger.error.call_count == 2
-        )  # 1 inside extract_data_from_message and 1 here
+            mock_logger.error.call_count == 1
+        ) 
         assert (
-            "Error extracting message (ValueError('Message retain flag is missing: " in mock_logger.error.call_args[0][0]
+            "Message retain is missing: " in mock_logger.error.call_args[0][0]
         )
         assert mock_producer.create_batch.call_count == 0
 

@@ -97,62 +97,59 @@ def subscribe(client: aiomqtt.Client):
     logger.info("Connected and subscribed")
 
 
+def process_message(message: aiomqtt.Message) -> Optional[dict]:
+    try:
+        logger.debug("attempting to extract message data")
+        message_data = extract_data_from_message(message)
+        json_data = json.dumps(message_data) if message_data else None
+        logger.debug(f"data extracted: {json_data}")
+        return json_data
+    except Exception as e:
+        log_error("Error extracting message", e)
+        return None
+
+
+async def add_to_batch(
+    event_batch: EventDataBatch, serialized_object: str
+) -> EventDataBatch:
+    try:
+        logger.debug("attempting to add to existing batch")
+        event_batch.add(EventData(serialized_object))
+        logger.debug("added to existing batch")
+        return event_batch
+    except ValueError:
+        logger.debug("batch full, adding new batch")
+        new_batch = await send_batch_and_create_new(event_batch)
+        return new_batch
+
+
+async def send_batch_and_create_new(existing_batch: EventDataBatch) -> EventDataBatch:
+    logger.debug("calling send_message_to_eventhub_async")
+    await send_message_to_eventhub_async(eventhub_producer_async, existing_batch)
+    logger.debug("creating new batch")
+    new_batch = await eventhub_producer_async.create_batch(
+        max_size_in_bytes=MAX_EVENT_BATCH_SIZE_BYTES
+    )
+    logger.debug("new batch created")
+    return new_batch
+
+
 async def on_message_async(
     _client: aiomqtt.Client,
     existing_event_batch: EventDataBatch,
     message: aiomqtt.Message,
 ) -> EventDataBatch:
-    """
-    This is the callback function that is called when a message is received
-    receives any message from the MQTT broker
-    creates a json object with the data and metadata and adds it to the event batch
-    if the batch is full, sends it to the event hub and creates a new batch
-
-    @param client: the MQTT client
-    @param this_event_batch: the current batch of messages to send to the event hub
-    @param message: the message received from the MQTT broker
-    @return: the updated or new batch of messages to send to the event hub
-    """
-    # update the time of the last message received
     global last_mqtt_message_time
-    json_data = None
     last_mqtt_message_time = time.time()
-    try:
-        logger.debug("attempting to extract message data")
-        message_data = extract_data_from_message(message)
-        json_data = json.dumps(message_data)
-        logger.debug("data extracted: %s", json_data)
-        if not json_data or json_data == "null":
-            logger.error("json_data is empty")
-            return existing_event_batch
-    except Exception as e:
-        log_error("Error extracting message", e)
+
+    json_data = process_message(message)
+    if not json_data:
+        logger.error("json_data is empty")
         return existing_event_batch
 
-    try:
-        logger.debug("attempting to add to existing batch")
-        existing_event_batch.add(EventData(json_data))
-        logger.debug("added to existing batch")
-
-    except ValueError:
-        # batch is full, send it and start a new one
-        logger.debug("batch full, adding new batch")
-        logger.debug("calling send_message_to_eventhub_async")
-        await send_message_to_eventhub_async(
-            eventhub_producer_async, existing_event_batch
-        )
-        logger.debug("creating new batch")
-        new_event_batch: EventDataBatch = await eventhub_producer_async.create_batch(
-            max_size_in_bytes=MAX_EVENT_BATCH_SIZE_BYTES
-        )
-        logger.debug("new batch created")
-        new_event_batch.add(EventData(json_data))
-        logger.debug("item added to new batch")
-        return new_event_batch
-    logger.info(
-        "total size of messages in queue %i", existing_event_batch.size_in_bytes
-    )
-    return existing_event_batch
+    updated_batch = await add_to_batch(existing_event_batch, json_data)
+    logger.info(f"total size of messages in queue {updated_batch.size_in_bytes}")
+    return updated_batch
 
 
 async def send_message_to_eventhub_async(
@@ -163,10 +160,6 @@ async def send_message_to_eventhub_async(
     @param producer: the event hub producer
     @param message_batch: the batch of messages to send
     """
-
-    # async with producer:
-    # event_data_batch = await producer.create_batch()
-    # event_data_batch.add(EventData(message))
     try:
         logger.info("Sending queue of size %i", message_batch.size_in_bytes)
         await producer.send_batch(message_batch)
@@ -222,7 +215,9 @@ def extract_data_from_message(message: aiomqtt.Message) -> Optional[dict]:
         "timestamp": time.time(),
     }
 
-    logger.debug(f"Extracted data: {data}", )
+    logger.debug(
+        f"Extracted data: {data}",
+    )
     return data
 
 
@@ -243,34 +238,6 @@ async def asyncLoop(eventhub_producer: EventHubProducerClient, client: aiomqtt.C
         ),  # poll healthcheck endpoint if configured
         check_mqtt_timeout(),  # check for timeout of MQTT messages
     )
-
-
-# async def message_loop(
-#     eventhub_producer: EventHubProducerClient, client: aiomqtt.Client
-# ):
-#     """
-#     message_loop receives messages from the MQTT broker and sends them to the event hub.
-#     @param eventhub_producer: the event hub producer
-#     @param client: the MQTT client
-#     """
-#     # create a new event batch
-#     logger.debug("creating new batch in message_loop")
-#     event_batch = await eventhub_producer.create_batch(
-#         max_size_in_bytes=MAX_EVENT_BATCH_SIZE_BYTES
-#     )
-#     async with client:
-#         logger.debug("subscribing to base topic: %s", MQTT_BASE_TOPIC)
-#         await client.subscribe(MQTT_BASE_TOPIC)
-#         logger.debug("subscribed to topic")
-#         async with client.messages() as messages:
-#             logger.debug("iterating through messages")
-#             await client.subscribe(MQTT_BASE_TOPIC)
-#             logger.debug(
-#                 "subscribed to base topic (%s)", MQTT_BASE_TOPIC
-#             )  # again (for some reason)?
-#             async for message in messages:
-#                 logger.debug("processing event batch")
-#                 event_batch = await on_message_async(client, event_batch, message)
 
 
 async def create_event_batch(

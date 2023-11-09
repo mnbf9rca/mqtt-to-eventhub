@@ -119,8 +119,7 @@ async def add_to_batch(
         return event_batch
     except ValueError:
         logger.debug("batch full, adding new batch")
-        new_batch = await send_batch_and_create_new(event_batch)
-        return new_batch
+        return await send_batch_and_create_new(event_batch)
 
 
 async def send_batch_and_create_new(existing_batch: EventDataBatch) -> EventDataBatch:
@@ -181,13 +180,11 @@ def extract_data_from_message(message: aiomqtt.Message) -> Optional[dict]:
         raise ValueError("Received null message")
 
     if message.topic is None or message.topic.value is None:
-        error_message = "Message topic or topic.value is missing: " + serialize_message(
-            message
-        )
+        error_message = f"Message topic or topic.value is missing: {serialize_message(message)}"
         logger.error(error_message)
         raise ValueError(error_message)
     if message.payload is None:
-        error_message = "Message payload is missing: " + serialize_message(message)
+        error_message = f"Message payload is missing: {serialize_message(message)}"
         logger.error(error_message)
         raise ValueError(error_message)
 
@@ -198,14 +195,14 @@ def extract_data_from_message(message: aiomqtt.Message) -> Optional[dict]:
         raise
 
     if message.qos is None:
-        error_message = "Message qos is missing: " + serialize_message(message)
+        error_message = f"Message qos is missing: {serialize_message(message)}"
         log_error(error_message)
-        # raise ValueError(error_message)
+            # raise ValueError(error_message)
 
     if message.retain is None:
-        error_message = "Message retain is missing: " + serialize_message(message)
+        error_message = f"Message retain is missing: {serialize_message(message)}"
         log_error(error_message)
-        # raise ValueError(error_message)
+            # raise ValueError(error_message)
 
     data = {
         "topic": message.topic.value,

@@ -14,18 +14,18 @@ jobs:
       matrix:
         python-version: ["3.9", "3.10", "3.11"]
     runs-on: ubuntu-latest
-    container: ubuntu:latest
+    container: ubuntu:latest@sha256:2b7412e6465c3c7fc5bb21d3e6f1917c167358449fecac8176c6e496e5c1f05f
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@65d7f2d534ac1bc67fcd62888c5f4f3d2cb2b236 # v4
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install OS dependencies
         run: |
           DEBIAN_FRONTEND=noninteractive apt update
           DEBIAN_FRONTEND=noninteractive apt install curl sqlite3 -y
-      - uses: snok/install-poetry@v1
+      - uses: snok/install-poetry@93ada01c735cc8a383ce0ce2ae205a21c415379b # v1
         with:
           version: 1.6.1 # pin the version as they keep changing their APIs
           virtualenvs-create: false
@@ -50,6 +50,6 @@ jobs:
           . venv/bin/activate
           pytest --cov mqtt_to_eventhub_module --cov-report=xml
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@eaaf4bedf32dbdc6b720b63067d99c4d77d6047d # v3
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}          

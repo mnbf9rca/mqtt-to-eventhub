@@ -26,15 +26,6 @@ from azure.eventhub.aio import EventHubProducerClient as EventHubProducerClientA
 from azure.eventhub.exceptions import EventHubError
 from dotenv_vault import load_dotenv
 
-# load dotenv only if it's available, otherwise assume environment variables are set
-# dotenv_spec = importlib.util.find_spec("dotenv_vault")
-# if dotenv_spec is not None:
-# print whether dotenv_key is populated
-if os.environ.get("DOTENV_KEY", None):
-    print("DOTENV_KEY is populated")
-else:
-    print("DOTENV_KEY is not populated")
-
 print(f"loading dotenv from {os.getcwd()}")
 load_dotenv(verbose=True)
 print("dotenv loaded")
@@ -70,18 +61,22 @@ MQTT_TIMEOUT = int(os.environ.get("MQTT_TIMEOUT", 120))  # seconds
 # time of last message received from MQTT; default to startup time to avoid false alarms
 last_mqtt_message_time: datetime = time.time()
 
-LOG_LEVEL = os.environ.get("LOG_LEVEL", "WARNING")
 
 eventhub_producer_async: EventHubProducerClient = None
 
+
+def setup_logger(logger_name: str, log_level: str) -> logging.Logger:
+    logger = logging.getLogger(logger_name)
+    logger.info("created logger")
+    # Set the log level based on the environment variable value
+    logger.setLevel(log_level)
+    return logger
+
+
 # Create a new logger
-logger = logging.getLogger(__name__)
-logger.info("created logger")
-# Set the log level based on the environment variable value
-if LOG_LEVEL in logging._nameToLevel:
-    logger.setLevel(LOG_LEVEL)
-else:
-    logger.setLevel(logging.INFO)
+LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
+
+logger = setup_logger(__name__, LOG_LEVEL)
 
 
 def on_connect(client: aiomqtt.Client, _userdata, _flags, result_code: int):
@@ -193,12 +188,13 @@ def extract_data_from_message(message: aiomqtt.Message) -> Optional[dict]:
         raise ValueError("Received null message")
 
     if message.topic is None or message.topic.value is None:
-        error_message = "Message topic or topic.value is missing: " + \
-            serialize_message(message)
+        error_message = "Message topic or topic.value is missing: " + serialize_message(
+            message
+        )
         logger.error(error_message)
         raise ValueError(error_message)
     if message.payload is None:
-        error_message = "Message payload is missing: " +  serialize_message(message)
+        error_message = "Message payload is missing: " + serialize_message(message)
         logger.error(error_message)
         raise ValueError(error_message)
 
@@ -214,7 +210,7 @@ def extract_data_from_message(message: aiomqtt.Message) -> Optional[dict]:
         raise ValueError(error_message)
 
     if message.retain is None:
-        error_message = "Message retain flag is missing: " +  serialize_message(message)
+        error_message = "Message retain flag is missing: " + serialize_message(message)
         logger.error(error_message)
         raise ValueError(error_message)
 
@@ -242,9 +238,12 @@ async def asyncLoop(eventhub_producer: EventHubProducerClient, client: aiomqtt.C
     logger.debug("initiating asyncLoop")
     await asyncio.gather(
         message_loop(eventhub_producer, client),  # check for messages from MQTT broker
-        poll_healthcheck_if_needed({"continue": True}),  # poll healthcheck endpoint if configured
+        poll_healthcheck_if_needed(
+            {"continue": True}
+        ),  # poll healthcheck endpoint if configured
         check_mqtt_timeout(),  # check for timeout of MQTT messages
     )
+
 
 # async def message_loop(
 #     eventhub_producer: EventHubProducerClient, client: aiomqtt.Client
@@ -274,24 +273,33 @@ async def asyncLoop(eventhub_producer: EventHubProducerClient, client: aiomqtt.C
 #                 event_batch = await on_message_async(client, event_batch, message)
 
 
-async def create_event_batch(producer: EventHubProducerClient, max_size_in_bytes: int, logger: logging.Logger) -> EventDataBatch:
+async def create_event_batch(
+    producer: EventHubProducerClient, max_size_in_bytes: int, logger: logging.Logger
+) -> EventDataBatch:
     logger.debug("Creating new event batch")
     return await producer.create_batch(max_size_in_bytes=max_size_in_bytes)
 
-async def process_message_batch(client: aiomqtt.Client, producer: EventHubProducerClient, messages: AsyncIterator[aiomqtt.Message], logger: logging.Logger) -> None:
+
+async def process_message_batch(
+    client: aiomqtt.Client,
+    producer: EventHubProducerClient,
+    messages: AsyncIterator[aiomqtt.Message],
+    logger: logging.Logger,
+) -> None:
     event_batch = await create_event_batch(producer, MAX_EVENT_BATCH_SIZE_BYTES, logger)
     async for message in messages:
         event_batch = await on_message_async(client, event_batch, message)
 
-async def message_loop(eventhub_producer: EventHubProducerClient, client: aiomqtt.Client) -> None:
+
+async def message_loop(
+    eventhub_producer: EventHubProducerClient, client: aiomqtt.Client
+) -> None:
     logger.debug("Starting message loop")
     async with client:
         logger.debug(f"Subscribing to base topic: {MQTT_BASE_TOPIC}")
         await client.subscribe(MQTT_BASE_TOPIC)
         async with client.messages() as messages:
             await process_message_batch(client, eventhub_producer, messages, logger)
-
-
 
 
 def log_error(error: Exception, *args) -> None:
@@ -323,12 +331,11 @@ def poll_healthcheck():
             requests.get(HEALTHCHECK_URL)
         elif HEALTHCHECK_METHOD.upper() == "POST":
             requests.post(HEALTHCHECK_URL)
-        else:  
+        else:
             error_message = f"Unknown healthcheck method: {HEALTHCHECK_METHOD}"
-            logger.error(error_message )
+            logger.error(error_message)
             raise Exception(error_message)
         logger.info("Healthcheck successful")
-
 
 
 async def poll_healthcheck_if_needed(running: dict = {"continue": True}):
@@ -346,19 +353,17 @@ async def poll_healthcheck_if_needed(running: dict = {"continue": True}):
             await asyncio.sleep(HEALTHCHECK_INTERVAL)
 
 
-async def check_mqtt_timeout():
+async def check_mqtt_timeout(running: dict = {"continue": True}):
     """
     checks the last time that the MQTT client received a message
     if it is longer ago than MQTT_TIMEOUT, then the MQTT connection is considered to be timed out
     so we log an error. Note that we don't actually close the MQTT connection or try to reconnect
     or fix the problem. We just log an error.
     """
-    while True:
+    while running["continue"]:
         if time.time() - last_mqtt_message_time > MQTT_TIMEOUT:
             log_error(
-                "No message received via MQTT for more than %s seconds - last message received at %s",
-                MQTT_TIMEOUT,
-                last_mqtt_message_time,
+                f"No message received via MQTT for more than {MQTT_TIMEOUT} seconds - last message received at {last_mqtt_message_time}",
             )
         await asyncio.sleep(MQTT_TIMEOUT)
 
@@ -387,6 +392,7 @@ def reduce_log_level():
     logging.getLogger("azure").setLevel(
         logging.WARNING
     )  # All azure clients are logged only for critical
+
 
 def main():
     """
@@ -440,24 +446,24 @@ def get_client():
         password=MQTT_PASSWORD,
     )
 
+
 def serialize_message(message: aiomqtt.Message) -> str:
     message_info = {}
-    
+
     for key, value in message.__dict__.items():
         # Skip private attributes
-        if key[0] == '_':
+        if key[0] == "_":
             continue
         # Convert datetime instances to strings
         elif isinstance(value, datetime):
             message_info[key] = value.isoformat()
         # Decode payload if it's a bytes object
-        elif key == 'payload' and isinstance(value, bytes):
-            message_info[key] = value.decode('utf-8', errors='ignore')
+        elif key == "payload" and isinstance(value, bytes):
+            message_info[key] = value.decode("utf-8", errors="ignore")
         # Convert topic to string
-        elif key == 'topic' and isinstance(value, aiomqtt.Topic):
+        elif key == "topic" and isinstance(value, aiomqtt.Topic):
             message_info[key] = value.value
         else:
             message_info[key] = value
 
     return json.dumps(message_info)
-

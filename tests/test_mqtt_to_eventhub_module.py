@@ -4,7 +4,8 @@ import time
 import pytest
 import aiomqtt
 import datetime
-from logging import Logger, WARNING
+import threading
+from logging import Logger, WARNING, DEBUG, INFO
 from unittest.mock import Mock, AsyncMock, MagicMock, patch, call, ANY
 
 import paho.mqtt.client as mqtt_client
@@ -429,35 +430,39 @@ class TestPollHealthCheckIfNeeded:
     @patch('mqtt_to_eventhub_module.asyncio.sleep', new_callable=AsyncMock)
     @patch('mqtt_to_eventhub_module.poll_healthcheck')
     @patch('mqtt_to_eventhub_module.logger')
-    async def test_poll_healthcheck_if_needed(self, mock_logger, mock_poll_healthcheck, mock_sleep):
-        mqtt_to_eventhub_module.HEALTHCHECK_URL = "http://healthcheck"
+    @pytest.mark.parametrize("healthcheck_url", [None, "http://healthcheck"])
+    async def test_poll_healthcheck_if_needed(self, mock_logger, mock_poll_healthcheck, mock_sleep, healthcheck_url):
+        mqtt_to_eventhub_module.HEALTHCHECK_URL = healthcheck_url
         mqtt_to_eventhub_module.HEALTHCHECK_INTERVAL = 1
-    
+
         running = {"continue": True}
 
-        # Define a side effect for the mock_sleep to stop the loop after first call
         async def sleep_side_effect(*args, **kwargs):
             running["continue"] = False
             return True
-        
+
         mock_sleep.side_effect = sleep_side_effect
-    
+
         # Run poll_healthcheck_if_needed and await its completion
         await mqtt_to_eventhub_module.poll_healthcheck_if_needed(running)
-    
-        # Assert that poll_healthcheck was called at least once
-        mock_poll_healthcheck.assert_called()
 
-        # Assert that asyncio.sleep was called with the correct interval
-        mock_sleep.assert_called_with(mqtt_to_eventhub_module.HEALTHCHECK_INTERVAL)
+        # Check if poll_healthcheck was called based on the healthcheck_url
+        if healthcheck_url:
+            mock_poll_healthcheck.assert_called()
+            mock_sleep.assert_called_with(mqtt_to_eventhub_module.HEALTHCHECK_INTERVAL)
+        else:
+            mock_poll_healthcheck.assert_not_called()
+            mock_sleep.assert_not_called()
 
+        # Assert that asyncio.sleep was called
 
         # Check the logs
-        mock_logger.debug.assert_has_calls([
+        expected_log_calls = [
             call("Entering poll_healthcheck_if_needed"),
-            call(f"HEALTHCHECK_URL is set to: {mqtt_to_eventhub_module.HEALTHCHECK_URL}"),
-            call(f"Sleeping for: {mqtt_to_eventhub_module.HEALTHCHECK_INTERVAL} seconds")
-        ], any_order=True)
+            call(f"HEALTHCHECK_URL is set to: {healthcheck_url}")
+        ]
+        mock_logger.debug.assert_has_calls(expected_log_calls, any_order=True)
+
 
 
 class TestCheckMqttTimeout:
@@ -656,50 +661,263 @@ class TestReduceLogLevel:
         logger_mock_uamqp.setLevel.assert_called_once_with(WARNING)
         logger_mock_azure.setLevel.assert_called_once_with(WARNING)
 
-# class TestMainFunction:
-#     @patch('mqtt_to_eventhub_module.asyncio.run')
-#     @patch('mqtt_to_eventhub_module.log_error')
-#     @patch('mqtt_to_eventhub_module.asyncLoop')
-#     @patch('mqtt_to_eventhub_module.get_producer')
-#     @patch('mqtt_to_eventhub_module.get_client')
-#     @patch('mqtt_to_eventhub_module.reduce_log_level')
-#     @patch('asyncio.new_event_loop')
-#     @patch('asyncio.set_event_loop')
-#     @pytest.mark.asyncio
-#     async def test_main_normal_flow(
-#         self,
-#         mock_set_event_loop,
-#         mock_new_event_loop,
-#         mock_reduce_log_level,
-#         mock_get_client,
-#         mock_get_producer,
-#         mock_async_loop,
-#         mock_log_error,
-#         mock_asyncio_run
-#     ):
-#         # Mocks
-#         mock_event_loop = MagicMock()
-#         mock_eventhub_producer_async = AsyncMock()
-#         mock_eventhub_producer_async.close.return_value = asyncio.Future()
 
-#         mock_client = MagicMock()
+class TestMainFunction:
+    @patch('mqtt_to_eventhub_module.logging')
+    @patch('mqtt_to_eventhub_module.log_error')
+    @patch('mqtt_to_eventhub_module.asyncLoop',  new_callable=AsyncMock)
+    @patch('mqtt_to_eventhub_module.get_producer')
+    @patch('mqtt_to_eventhub_module.get_client')
+    @patch('mqtt_to_eventhub_module.reduce_log_level')
+    @pytest.mark.asyncio
+    async def test_main_normal_flow(
+        self,
+        mock_reduce_log_level,
+        mock_get_client,
+        mock_get_producer,
+        mock_asyncLoop,
+        mock_log_error,
+        mock_logging
+    ):
+        # Mocks
+        mock_eventhub_producer_async = AsyncMock()
+        mock_eventhub_producer_async.close.return_value = asyncio.Future()
 
-#         # Setting return values for mocks
-#         mock_new_event_loop.return_value = mock_event_loop
-#         mock_get_client.return_value = mock_client
-#         mock_get_producer.return_value = mock_eventhub_producer_async
+        mock_client = MagicMock()
 
-#         # Act
-#         mqtt_to_eventhub_module.main()
+        # Setting return values for mocks
+        mock_get_client.return_value = mock_client
+        mock_get_producer.return_value = mock_eventhub_producer_async
 
-#         # Assert
-#         mock_reduce_log_level.assert_called_once()
-#         mock_new_event_loop.assert_called_once()
-#         mock_set_event_loop.assert_called_once()
-#         mock_get_client.assert_called_once()
-#         mock_get_producer.assert_called_once()
-#         mock_event_loop.run_until_complete.assert_called_once()
-#         mock_asyncio_run.assert_called_once_with(mock_eventhub_producer_async.close.return_value)
+        # Act
+        main_thread = threading.Thread(target=mqtt_to_eventhub_module.main)
+        main_thread.start()
+        main_thread.join()
+
+        # Assert
+        mock_reduce_log_level.assert_called_once()
+        mock_get_client.assert_called_once()
+        mock_get_producer.assert_called_once()
+        mock_asyncLoop.assert_awaited_once()
+        assert mock_log_error.call_count == 0
+        assert mock_logging.debug.call_count > 2
+
+    @patch('mqtt_to_eventhub_module.logging')
+    @patch('mqtt_to_eventhub_module.log_error')
+    @patch('mqtt_to_eventhub_module.asyncLoop', new_callable=AsyncMock)
+    @patch('mqtt_to_eventhub_module.get_producer')
+    @patch('mqtt_to_eventhub_module.get_client')
+    @patch('mqtt_to_eventhub_module.reduce_log_level')
+    def test_main_with_exception(
+        self,
+        mock_reduce_log_level,
+        mock_get_client,
+        mock_get_producer,
+        mock_asyncLoop,
+        mock_log_error,
+        mock_logging
+    ):
+        # Mocks
+        mock_eventhub_producer_async = AsyncMock()
+        mock_eventhub_producer_async.close.return_value = asyncio.Future()
+
+        mock_client = MagicMock()
+
+        # Setting return values for mocks
+        mock_get_client.return_value = mock_client
+        mock_get_producer.return_value = mock_eventhub_producer_async
+
+        # Setup to raise an exception
+        mock_asyncLoop.side_effect = Exception("Test exception")
+
+        # Act
+        main_thread = threading.Thread(target=mqtt_to_eventhub_module.main)
+        main_thread.start()
+        main_thread.join()
+
+        # Assert
+        mock_log_error.assert_called_once_with(mock_asyncLoop.side_effect)
+        mock_reduce_log_level.assert_called_once()
+        mock_get_client.assert_called_once()
+        mock_get_producer.assert_called_once()
+
+    @patch('mqtt_to_eventhub_module.logging')
+    @patch('mqtt_to_eventhub_module.log_error')
+    @patch('mqtt_to_eventhub_module.asyncLoop', new_callable=AsyncMock)
+    @patch('mqtt_to_eventhub_module.get_producer')
+    @patch('mqtt_to_eventhub_module.get_client')
+    @patch('mqtt_to_eventhub_module.reduce_log_level')
+    def test_main_with_keyboard_interrupt(
+        self,
+        mock_reduce_log_level,
+        mock_get_client,
+        mock_get_producer,
+        mock_asyncLoop,
+        mock_log_error,
+        mock_logging
+    ):
+        # Mocks
+        mock_eventhub_producer_async = AsyncMock()
+        mock_eventhub_producer_async.close.return_value = asyncio.Future()
+
+        mock_client = MagicMock()
+
+        # Setting return values for mocks
+        mock_get_client.return_value = mock_client
+        mock_get_producer.return_value = mock_eventhub_producer_async
+
+        # Setup to raise KeyboardInterrupt
+        mock_asyncLoop.side_effect = KeyboardInterrupt()
+
+        # Act
+        main_thread = threading.Thread(target=mqtt_to_eventhub_module.main)
+        main_thread.start()
+        main_thread.join()
+
+        # Assert
+        mock_log_error.assert_not_called()
+        mock_reduce_log_level.assert_called_once()
+        mock_get_client.assert_called_once()
+        mock_get_producer.assert_called_once()
 
 
+class TestEventhubCallbacks:
+    @patch('mqtt_to_eventhub_module.log_error')
+    def test_on_error(self, mock_log_error):
+        # Test data
+        test_events = "test_events"
+        test_pid = "test_pid"
+        test_error = Exception("test error")
+
+        # Act
+        mqtt_to_eventhub_module.on_error(test_events, test_pid, test_error)
+
+        # Assert
+        mock_log_error.assert_called_once_with(test_events, test_pid, test_error)
+
+    @patch('mqtt_to_eventhub_module.logger')
+    @pytest.mark.asyncio
+    async def test_on_success_async(self, mock_logger):
+        # Test data
+        test_events = "test_events"
+        test_pid = "test_pid"
+
+        # Act
+        await mqtt_to_eventhub_module.on_success_async(test_events, test_pid)
+
+        # Assert
+        mock_logger.info.assert_called_once_with(test_events, test_pid)
+
+class TestSetupLogger:
+    def test_setup_logger_correct_level(self):
+        test_logger_name = "test_logger"
+        test_log_level = "DEBUG"
+
+        # Act
+        logger = mqtt_to_eventhub_module.setup_logger(test_logger_name, test_log_level)
+
+        # Assert
+        assert logger.name == test_logger_name
+        assert logger.level == DEBUG
+
+    def test_setup_logger_invalid_level(self):
+        test_logger_name = "test_logger"
+        invalid_log_level = "INVALID_LEVEL"
+
+        # Act and Assert
+        with pytest.raises(ValueError) as excinfo:
+            mqtt_to_eventhub_module.setup_logger(test_logger_name, invalid_log_level)
+        
+        assert str(excinfo.value) == f"Unknown level: '{invalid_log_level}'"
+
+
+class TestLogError:
+    @pytest.mark.parametrize(
+        "healthcheck_url, healthcheck_failure_url, expected_failure_url, exception_to_pass, args_to_pass",
+        [
+            ("http://example.com/health", "http://example.com/failure", "http://example.com/failure", Exception("Test error"), None),
+            ("http://example.com/health", None, "http://example.com/health", Exception("Test error"), None),
+            (None, None, None, Exception("Test error"), None),
+            ("http://example.com/health", "http://example.com/failure", "http://example.com/failure", Exception("Test error"), "other argument"),
+            ("http://example.com/health", None, "http://example.com/health", Exception("Test error"), "other argument"),
+            (None, None, None, Exception("Test error"), "other argument"),
+            (None, None, None, Exception("Test error"), ["other argument1","other argument2"]),
+        ]
+    )
+    @patch('mqtt_to_eventhub_module.requests.post')
+    @patch('mqtt_to_eventhub_module.logger')
+    def test_log_error_with_different_configs(
+        self, 
+        mock_logger, 
+        mock_requests_post, 
+        monkeypatch, 
+        healthcheck_url, 
+        healthcheck_failure_url, 
+        expected_failure_url,
+        exception_to_pass,
+        args_to_pass
+    ):
+
+        def create_expected_error_text(exception, *args):
+            return f"{exception} {args}"
+        # Temporarily set global variables
+        monkeypatch.setattr(mqtt_to_eventhub_module, 'HEALTHCHECK_URL', healthcheck_url)
+        monkeypatch.setattr(mqtt_to_eventhub_module, 'HEALTCHECK_FAILURE_URL', healthcheck_failure_url or healthcheck_url)
+        # unpack args_to_pass so that they're passed as separate arguments
+        expected_error_text = create_expected_error_text(exception_to_pass, *args_to_pass if args_to_pass is not None else ())
+
+                # Act
+        mqtt_to_eventhub_module.log_error(exception_to_pass, *args_to_pass if args_to_pass is not None else [])
+
+        # Assert
+        # assert mock_logger.error.call_count == 1
+        mock_logger.error.assert_called_once_with(expected_error_text)
+        if expected_failure_url:
+            mock_requests_post.assert_called_once_with(expected_failure_url, data={"error": expected_error_text})
+        else:
+            mock_requests_post.assert_not_called()
+
+class TestCheckMqttTimeout:
+    @pytest.mark.asyncio
+    @patch('mqtt_to_eventhub_module.log_error')
+    @patch('mqtt_to_eventhub_module.time.time')
+    async def test_check_mqtt_timeout(self, mock_time, mock_log_error):
+        mqtt_to_eventhub_module.MQTT_TIMEOUT = 10  # 10 seconds for timeout
+        last_message_time = 100
+        mqtt_to_eventhub_module.last_mqtt_message_time = last_message_time
+
+        running = {"continue": True}
+        iterations = 0
+
+        # Set initial return value for mock_time
+        mock_time.return_value = last_message_time
+
+        # Define a side effect for asyncio.sleep to control loop iterations
+        async def sleep_side_effect(*args, **kwargs):
+            nonlocal iterations
+            iterations += 1
+            if iterations == 1:
+                # First iteration, within MQTT_TIMEOUT
+                mock_time.return_value = last_message_time + mqtt_to_eventhub_module.MQTT_TIMEOUT - 1
+            elif iterations == 2:
+                # Second iteration, MQTT_TIMEOUT exceeded
+                mock_time.return_value = last_message_time + mqtt_to_eventhub_module.MQTT_TIMEOUT + 1
+            else: # iterations > 2 - stop the loop
+                running["continue"] = False
+            return True
+
+        with patch('mqtt_to_eventhub_module.asyncio.sleep', new_callable=AsyncMock) as mock_sleep:
+            mock_sleep.side_effect = sleep_side_effect
+
+            # Run check_mqtt_timeout and await its completion
+            await mqtt_to_eventhub_module.check_mqtt_timeout(running)
+        
+        # Assert that asyncio.sleep was called twice i.e. we have 3 executions
+        assert mock_sleep.call_count == 3
+
+        # Assert that the error log is called only once, after timeout
+        assert mock_log_error.call_count == 1
+
+        expected_error_message = f"No message received via MQTT for more than {mqtt_to_eventhub_module.MQTT_TIMEOUT} seconds - last message received at {last_message_time}"
+        mock_log_error.assert_called_with(expected_error_message)
 

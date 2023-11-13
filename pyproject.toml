@@ -9,7 +9,7 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = ">=3.9,<4.0"
 paho-mqtt = "^1.6.1"
-python-dotenv-vault = "^0.6.3"
+python-dotenv-vault = "^0.6.4"
 azure-eventhub = "^5.11.4"
 requests = "^2.31.0"
 aiomqtt = "^1.2.0"

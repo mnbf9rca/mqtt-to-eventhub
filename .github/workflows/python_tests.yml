@@ -14,7 +14,7 @@ jobs:
       matrix:
         python-version: ["3.9", "3.10", "3.11"]
     runs-on: ubuntu-latest
-    container: ubuntu:latest@sha256:2b7412e6465c3c7fc5bb21d3e6f1917c167358449fecac8176c6e496e5c1f05f
+    container: ubuntu:latest@sha256:8eab65df33a6de2844c9aefd19efe8ddb87b7df5e9185a4ab73af936225685bb
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
       - name: Set up Python ${{ matrix.python-version }}

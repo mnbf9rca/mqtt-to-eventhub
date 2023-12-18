@@ -16,18 +16,41 @@ paho-mqtt = ">=1.6.0,<2.0.0"
 typing-extensions = {version = ">=4.4.0,<5.0.0", markers = "python_version < \"3.10\""}
 
 [[package]]
+name = "anyio"
+version = "4.2.0"
+description = "High level compatibility layer for multiple asynchronous event loop implementations"
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "anyio-4.2.0-py3-none-any.whl", hash = "sha256:745843b39e829e108e518c489b31dc757de7d2131d53fac32bd8df268227bfee"},
+    {file = "anyio-4.2.0.tar.gz", hash = "sha256:e1875bb4b4e2de1669f4bc7869b6d3f54231cdced71605e6e64c9be77e3be50f"},
+]
+
+[package.dependencies]
+exceptiongroup = {version = ">=1.0.2", markers = "python_version < \"3.11\""}
+idna = ">=2.8"
+sniffio = ">=1.1"
+typing-extensions = {version = ">=4.1", markers = "python_version < \"3.11\""}
+
+[package.extras]
+doc = ["Sphinx (>=7)", "packaging", "sphinx-autodoc-typehints (>=1.2.0)", "sphinx-rtd-theme"]
+test = ["anyio[trio]", "coverage[toml] (>=7)", "exceptiongroup (>=1.2.0)", "hypothesis (>=4.0)", "psutil (>=5.9)", "pytest (>=7.0)", "pytest-mock (>=3.6.1)", "trustme", "uvloop (>=0.17)"]
+trio = ["trio (>=0.23)"]
+
+[[package]]
 name = "azure-core"
-version = "1.29.5"
+version = "1.29.6"
 description = "Microsoft Azure Core Library for Python"
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "azure-core-1.29.5.tar.gz", hash = "sha256:52983c89d394c6f881a121e5101c5fa67278ca3b1f339c8fb2ef39230c70e9ac"},
-    {file = "azure_core-1.29.5-py3-none-any.whl", hash = "sha256:0fa04b7b1f7d44a4fb8468c4093deb2ea01fdf4faddbf802ed9205615f99d68c"},
+    {file = "azure-core-1.29.6.tar.gz", hash = "sha256:13b485252ecd9384ae624894fe51cfa6220966207264c360beada239f88b738a"},
+    {file = "azure_core-1.29.6-py3-none-any.whl", hash = "sha256:604a005bce6a49ba661bb7b2be84a9b169047e52fcfcd0a4e4770affab4178f7"},
 ]
 
 [package.dependencies]
-requests = ">=2.18.4"
+anyio = ">=3.0,<5.0"
+requests = ">=2.21.0"
 six = ">=1.11.0"
 typing-extensions = ">=4.6.0"
 
@@ -419,13 +442,13 @@ test-randomorder = ["pytest-randomly"]
 
 [[package]]
 name = "distlib"
-version = "0.3.7"
+version = "0.3.8"
 description = "Distribution utilities"
 optional = false
 python-versions = "*"
 files = [
-    {file = "distlib-0.3.7-py2.py3-none-any.whl", hash = "sha256:2e24928bc811348f0feb63014e97aaae3037f2cf48712d51ae61df7fd6075057"},
-    {file = "distlib-0.3.7.tar.gz", hash = "sha256:9dafe54b34a028eafd95039d5e5d4851a13734540f1331060d31c9916e7147a8"},
+    {file = "distlib-0.3.8-py2.py3-none-any.whl", hash = "sha256:034db59a0b96f8ca18035f36290806a9a6e6bd9d1ff91e45a7f172eb17e51784"},
+    {file = "distlib-0.3.8.tar.gz", hash = "sha256:1530ea13e350031b6312d8580ddb6b27a104275a31106523b8f123787f494f64"},
 ]
 
 [[package]]
@@ -899,6 +922,17 @@ python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*"
 files = [
     {file = "six-1.16.0-py2.py3-none-any.whl", hash = "sha256:8abb2f1d86890a2dfb989f9a77cfcfd3e47c2a354b01111771326f8aa26e0254"},
     {file = "six-1.16.0.tar.gz", hash = "sha256:1e61c37477a1626458e36f7b1d82aa5c9b094fa4802892072e49de9c60c4c926"},
+]
+
+[[package]]
+name = "sniffio"
+version = "1.3.0"
+description = "Sniff out which async library your code is running under"
+optional = false
+python-versions = ">=3.7"
+files = [
+    {file = "sniffio-1.3.0-py3-none-any.whl", hash = "sha256:eecefdce1e5bbfb7ad2eeaabf7c1eeb404d7757c379bd1f7e5cce9d8bf425384"},
+    {file = "sniffio-1.3.0.tar.gz", hash = "sha256:e60305c5e5d314f5389259b7f22aaa33d8f7dee49763119234af3755c55b9101"},
 ]
 
 [[package]]

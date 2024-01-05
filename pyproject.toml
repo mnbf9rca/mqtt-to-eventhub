@@ -25,7 +25,7 @@ pytest = "^7.4.2"
 pytest-asyncio = "^0.23.0"
 freezegun = "^1.2.2"
 pytest-cov = "^4.1.0"
-flake8 = "^6.1.0"
+flake8 = "^7.0.0"
 flake8-pyproject = "^1.2.3"
 coverage = {extras = ["toml"], version = "^7.3.2"}
 

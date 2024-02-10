@@ -2,13 +2,13 @@
 
 [[package]]
 name = "aiomqtt"
-version = "1.2.1"
+version = "2.0.0"
 description = "The idiomatic asyncio MQTT client, wrapped around paho-mqtt"
 optional = false
 python-versions = ">=3.8,<4.0"
 files = [
-    {file = "aiomqtt-1.2.1-py3-none-any.whl", hash = "sha256:3925b40b2b95b1905753d53ef3a9162e903cfab35ebe9647ab4d52e45ffb727f"},
-    {file = "aiomqtt-1.2.1.tar.gz", hash = "sha256:7582f4341f08ef7110dd9ab3a559454dc28ccda1eac502ff8f08a73b238ecede"},
+    {file = "aiomqtt-2.0.0-py3-none-any.whl", hash = "sha256:f3b97eca4a5a2c40769ed14f660520f733be1d2ec383a9976153fe49141e2fa2"},
+    {file = "aiomqtt-2.0.0.tar.gz", hash = "sha256:3d480429334bdba4e4b9936c6cc198ea4f76a94d36cf294e0f713ec59f6a2120"},
 ]
 
 [package.dependencies]
@@ -1008,4 +1008,4 @@ test = ["covdefaults (>=2.3)", "coverage (>=7.2.7)", "coverage-enable-subprocess
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.9,<4.0"
-content-hash = "eab9a6885b75445a52fc5354a03100e7b672f75e4e4f33b7da71f38d567efe61"
+content-hash = "e81765e843430a51a54d3d89276bb49ebaf8bfaa515068b72c57a0bd3d69dd1e"

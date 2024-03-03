@@ -8,11 +8,10 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = ">=3.9,<4.0"
-paho-mqtt = "^2.0.0"
 python-dotenv-vault = "^0.6.3"
 azure-eventhub = "^5.11.4"
 requests = "^2.31.0"
-aiomqtt = "^1.2.0"
+aiomqtt = "^2.0.0"
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.0.0"

@@ -70,16 +70,17 @@ class TestActualConnections:
         client = mqtt_to_eventhub_module.get_client()
 
         # Async function to handle connection
-        async def on_connect_async(client, _userdata, _flags, rc):
+        async def on_connect_async(_client, _userdata, _flags, rc, _properties):
             assert rc == 0  # 0 means successful connection
 
         client.on_connect = on_connect_async
 
-        await client.connect()  # .connect_async(MQTT_HOST, MQTT_PORT)
+        # see https://sbtinstruments.github.io/aiomqtt/migration-guide-v2.html
+        await client.__aenter__()  # .connect_async(MQTT_HOST, MQTT_PORT)
         await asyncio.sleep(1)  # give it a second to connect
 
         # Disconnect
-        await client.disconnect()
+        await client.__aexit__(None, None, None)
 
     @pytest.mark.asyncio
     @patch("mqtt_to_eventhub_module.on_success_async", new_callable=AsyncMock)
@@ -807,20 +808,12 @@ class TestMessageLoop:
         client_mock = AsyncMock(spec=aiomqtt.Client)
         client_mock.subscribe = AsyncMock()
 
-        # Mock the messages context manager to be an async generator
-        messages_mock = AsyncMock()
-
+        # Prepare messages async generator directly without using __aenter__
         async def messages_async_gen():
-            for msg in [
-                AsyncMock()
-                # aiomqtt.Message(topic=self.PATCHED_BASE_TOPIC, payload=b"test", qos=0, retain=False, mid=0, properties={}),
-            ]:
-                yield msg
+            yield AsyncMock()  # Mock a message
 
-        expected_messages_generator = messages_async_gen()
-        # Use AsyncMock to return an async generator when entering the context manager
-        messages_mock.__aenter__.return_value = expected_messages_generator
-        client_mock.messages.return_value = messages_mock
+        # Mock `client.messages` as an async iterator
+        client_mock.messages = messages_async_gen()
 
         # Run the message loop with the mocked objects
         await mqtt_to_eventhub_module.message_loop(eventhub_producer_mock, client_mock)
@@ -833,14 +826,14 @@ class TestMessageLoop:
             client_mock, eventhub_producer_mock, ANY, logger_mock
         )
 
-        # for the async generator, we need to check that the actual generator passed to process_message_batch is the same as the one we expect
+        # we need to check that the actual generator passed to process_message_batch is the same as the one we expect
         actual_call_args = process_message_batch_mock.await_args
         actual_messages_arg = actual_call_args[0][
             2
-        ]  # This should be the async generator
-        # Now check if actual_messages_arg is the async generator we expect
+        ]  # This should be client_mock.messages
+        # Now check if actual_messages_arg is called with client_mock.messages as we expect
         assert (
-            actual_messages_arg is expected_messages_generator
+            actual_messages_arg is client_mock.messages
         ), "process_message_batch was not called with the expected async generator"
 
         # If you need to check log messages

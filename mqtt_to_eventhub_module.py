@@ -262,8 +262,9 @@ async def message_loop(
     async with client:
         logger.debug(f"Subscribing to base topic: {MQTT_BASE_TOPIC}")
         await client.subscribe(MQTT_BASE_TOPIC)
-        async with client.messages() as messages:
-            await process_message_batch(client, eventhub_producer, messages, logger)
+        # async with client.messages() as messages:
+        # see https://sbtinstruments.github.io/aiomqtt/migration-guide-v2.html#changes-to-the-message-queue
+        await process_message_batch(client, eventhub_producer, client.messages, logger)
 
 
 def log_error(error: Exception, *args) -> None:

@@ -70,16 +70,17 @@ class TestActualConnections:
         client = mqtt_to_eventhub_module.get_client()
 
         # Async function to handle connection
-        async def on_connect_async(client, _userdata, _flags, rc):
+        async def on_connect_async(_client, _userdata, _flags, rc, _properties):
             assert rc == 0  # 0 means successful connection
 
         client.on_connect = on_connect_async
 
-        await client.connect()  # .connect_async(MQTT_HOST, MQTT_PORT)
+        # see https://sbtinstruments.github.io/aiomqtt/migration-guide-v2.html
+        await client.__aenter__()  # .connect_async(MQTT_HOST, MQTT_PORT)
         await asyncio.sleep(1)  # give it a second to connect
 
         # Disconnect
-        await client.disconnect()
+        await client.__aexit__(None, None, None)
 
     @pytest.mark.asyncio
     @patch("mqtt_to_eventhub_module.on_success_async", new_callable=AsyncMock)

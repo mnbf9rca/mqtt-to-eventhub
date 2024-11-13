@@ -36,13 +36,13 @@ aio = ["aiohttp (>=3.0)"]
 
 [[package]]
 name = "azure-eventhub"
-version = "5.12.2"
+version = "5.13.0"
 description = "Microsoft Azure Event Hubs Client Library for Python"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "azure_eventhub-5.12.2-py3-none-any.whl", hash = "sha256:a75fc0e21919cd164b111e9a09b6e3e59749dd35956402294af8d0d2a5bfca27"},
-    {file = "azure_eventhub-5.12.2.tar.gz", hash = "sha256:92bd42a73e426947d98e7688837e99df4b5028ab245677680c6135836ca59558"},
+    {file = "azure_eventhub-5.13.0-py3-none-any.whl", hash = "sha256:d9c9e0870e9abec277b25b32d630e1970ea59f04b036fda234722f102ae539fc"},
+    {file = "azure_eventhub-5.13.0.tar.gz", hash = "sha256:aea33a0ab4f8c9c2212e455c4518be9a86c0015ca63019acfc5778ab19078cf0"},
 ]
 
 [package.dependencies]
